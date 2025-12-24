@@ -1,0 +1,170 @@
+{% load humanize %}
+{% load custom_filters %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte Caja Chica</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-right {
+                content: "Pág " counter(page) " de " counter(pages);
+                font-size: 10px;
+                color: #666;
+            }
+        }
+        
+        body {
+            font-family: 'Helvetica', sans-serif;
+            color: #333;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        /* Cabecera */
+        .header {
+            border-bottom: 2px solid #2c3e50;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            display: flex; /* Weasyprint soporta Flexbox limitado, usaremos table para seguridad */
+        }
+        
+        table.header-table { width: 100%; border: none; }
+        table.header-table td { border: none; vertical-align: top; }
+        
+        .titulo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            text-transform: uppercase;
+            margin: 0;
+        }
+        .subtitulo { color: #7f8c8d; font-size: 12px; margin-top: 5px; }
+        
+        .meta-info { text-align: right; font-size: 11px; color: #555; }
+
+        /* Tabla de Datos */
+        .tabla-datos {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        
+        .tabla-datos th {
+            background-color: #f2f2f2;
+            color: #2c3e50;
+            font-weight: bold;
+            text-align: left;
+            padding: 8px;
+            border-bottom: 2px solid #ddd;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        
+        .tabla-datos td {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .tabla-datos tr:nth-child(even) { background-color: #fcfcfc; }
+        
+        /* Totales */
+        .total-section {
+            text-align: right;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 2px solid #2c3e50;
+        }
+        .total-label { font-size: 14px; font-weight: bold; margin-right: 10px; }
+        .total-value { font-size: 18px; font-weight: bold; color: #e74a3b; }
+
+        /* Firmas */
+        .firmas {
+            margin-top: 80px;
+            width: 100%;
+        }
+        .firma-box {
+            width: 40%;
+            border-top: 1px solid #333;
+            text-align: center;
+            padding-top: 10px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td>
+                <h1 class="titulo">Rendición de Caja Chica</h1>
+                <div class="subtitulo">{{ empresa_nombre }}</div>
+            </td>
+            <td class="meta-info">
+                <strong>Fecha de Emisión:</strong> {{ fecha_emision|date:"d/m/Y H:i" }}<br>
+                <strong>Generado por:</strong> {{ usuario.first_name }} {{ usuario.last_name }}<br>
+                <strong>Estado:</strong> Finalizado
+            </td>
+        </tr>
+    </table>
+
+    <table class="tabla-datos">
+        <thead>
+            <tr>
+                <th style="width: 15%;">Fecha</th>
+                <th style="width: 20%;">Responsable</th>
+                <th style="width: 15%;">Tipo Doc.</th>
+                <th style="width: 35%;">Descripción / Detalle</th>
+                <th style="width: 15%; text-align: right;">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for gasto in gastos %}
+            <tr>
+                <td>{{ gasto.fecha|date:"d/m/Y" }}</td>
+                <td>{{ gasto.responsable|title }}</td>
+                <td>{{ gasto.tipo_documento }}</td>
+                <td>
+                    {{ gasto.descripcion }}
+                    {% if gasto.negocio %}
+                        <br><span style="color: #888; font-size: 10px;">Negocio: {{ gasto.negocio }}</span>
+                    {% endif %}
+                </td>
+                <td style="text-align: right;">${{ gasto.monto|intcomma }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 20px;">No hay movimientos registrados.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="total-section">
+        <span class="total-label">TOTAL RENDICIÓN:</span>
+        <span class="total-value">${{ total_gasto|intcomma }}</span>
+    </div>
+
+    <div class="firmas">
+        <table style="width: 100%;">
+            <tr>
+                <td style="text-align: center;">
+                    <div style="width: 200px; border-top: 1px solid #000; margin: 0 auto; padding-top: 5px;">
+                        <strong>Firma Responsable</strong><br>
+                        <span style="font-size: 10px; color: #666;">Entregado por</span>
+                    </div>
+                </td>
+                <td style="text-align: center;">
+                    <div style="width: 200px; border-top: 1px solid #000; margin: 0 auto; padding-top: 5px;">
+                        <strong>Firma Aprobación</strong><br>
+                        <span style="font-size: 10px; color: #666;">Finanzas / Gerencia</span>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+</body>
+</html>

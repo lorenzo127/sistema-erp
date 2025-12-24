@@ -1,0 +1,50 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <h1 class="h3 mb-4 text-gray-800">Importar Personal y Finiquitos</h1>
+
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Subir Excel de RRHH</h6>
+                </div>
+                <div class="card-body">
+                    
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Importante:</strong><br>
+                        El sistema buscará automáticamente la hoja llamada <b>"Personal Finiquitado"</b>.<br>
+                        Asegúrate de que el Excel tenga las columnas: 
+                        <code>RUT, NOMBRE, CARGO, CONTRATO, FINIQUITO</code>.
+                    </div>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label for="archivo_excel">Selecciona el archivo (.xlsx)</label>
+                            <input type="file" class="form-control-file" name="archivo_excel" id="archivo_excel" required accept=".xlsx, .xls">
+                        </div>
+
+                        <hr>
+
+                        <button type="submit" class="btn btn-success btn-icon-split">
+                            <span class="icon text-white-50">
+                                <i class="fas fa-file-upload"></i>
+                            </span>
+                            <span class="text">Procesar Archivo</span>
+                        </button>
+
+                        <a href="{% url 'dashboard_rrhh' %}" class="btn btn-secondary btn-icon-split ml-2">
+                            <span class="text">Cancelar</span>
+                        </a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

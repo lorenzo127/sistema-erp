@@ -1,0 +1,79 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body text-center pt-5">
+                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center mx-auto mb-3" 
+                         style="width: 100px; height: 100px; font-size: 40px; font-weight: bold;">
+                        {{ user.username|slice:":1"|upper }}
+                    </div>
+                    
+                    <h4 class="fw-bold text-dark">{{ user.username }}</h4>
+                    <p class="text-muted">{{ user.email|default:"Sin correo registrado" }}</p>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="text-start px-3">
+                        <div class="mb-3">
+                            <small class="text-uppercase text-muted fw-bold" style="font-size: 11px;">Rol de Sistema</small>
+                            <div class="d-flex align-items-center mt-1">
+                                <i class="bi bi-shield-lock-fill text-primary me-2"></i>
+                                {% if user.is_superuser %}
+                                    <span>Administrador Total</span>
+                                {% else %}
+                                    <span>Usuario Estándar</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <small class="text-uppercase text-muted fw-bold" style="font-size: 11px;">Miembro Desde</small>
+                            <div class="d-flex align-items-center mt-1">
+                                <i class="bi bi-calendar-check text-success me-2"></i>
+                                <span>{{ user.date_joined|date:"d F Y" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="m-0 fw-bold text-dark">
+                        <i class="bi bi-key-fill me-2 text-warning"></i>Seguridad y Contraseña
+                    </h6>
+                </div>
+                <div class="card-body p-4">
+                    <div class="alert alert-light border border-warning d-flex align-items-center mb-4" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-3 fs-4"></i>
+                        <div class="small text-muted">
+                            Para proteger su cuenta, asegúrese de usar una contraseña que no haya usado en otros sitios. 
+                            El sistema le pedirá su clave actual para confirmar.
+                        </div>
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        {{ form|crispy }}
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="submit" class="btn btn-warning fw-bold text-dark">
+                                <i class="bi bi-save2 me-2"></i>Actualizar Contraseña
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

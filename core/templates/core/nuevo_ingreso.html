@@ -1,0 +1,153 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8"> 
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white border-bottom-0 pt-4 pb-0">
+                    <h4 class="fw-bold text-success mb-0">
+                        <i class="bi bi-plus-circle-fill me-2"></i>Registrar Nuevo Gasto
+                    </h4>
+                    <p class="text-muted small mt-1">Complete el formulario. Use la IA para autocompletar la clasificación.</p>
+                </div>
+
+                <div class="card-body p-4">
+                    
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.fecha|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.monto_transferencia|as_crispy_field }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="id_descripcion_movimiento" class="form-label requiredField">
+                                Descripción del Movimiento<span class="asteriskField">*</span>
+                            </label>
+                            
+                            <div class="input-group">
+                                <input type="text" name="descripcion_movimiento" class="form-control" required id="id_descripcion_movimiento" placeholder="Ej: Pago factura de internet...">
+                                
+                                <button class="btn btn-warning text-dark fw-bold" type="button" id="btn-ia" title="Autocompletar Clasificación">
+                                    <i class="bi bi-stars"></i> IA
+                                </button>
+                            </div>
+                            
+                            <div class="form-text mt-1" id="ia-feedback">
+                                <i class="bi bi-info-circle me-1"></i>Escribe el detalle y presiona el botón amarillo.
+                            </div>
+                            
+                            {% if form.descripcion_movimiento.errors %}
+                                <div class="text-danger small mt-1">{{ form.descripcion_movimiento.errors }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.clasificacion|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.empresa|as_crispy_field }}
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                {{ form.centro_costo|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.tipo|as_crispy_field }}
+                            </div>
+                        </div>
+
+                         <div class="row">
+                             <div class="col-md-6 mb-3">
+                                {{ form.n_documento|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                {{ form.estado|as_crispy_field }}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                             {{ form.detalle|as_crispy_field }}
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                            <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+                                Cancelar
+                            </a>
+                            <button type="submit" class="btn btn-success px-4 fw-bold">
+                                <i class="bi bi-save me-1"></i> Guardar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const btnIA = document.getElementById('btn-ia');
+        // CORREGIDO: IDs actualizados según tu modelo
+        const inputDesc = document.getElementById('id_descripcion_movimiento');
+        const selectClas = document.getElementById('id_clasificacion'); 
+        const feedback = document.getElementById('ia-feedback');
+
+        btnIA.addEventListener('click', function() {
+            const texto = inputDesc.value.trim();
+
+            if (texto.length < 3) {
+                feedback.innerHTML = '<span class="text-danger">Escribe más detalle...</span>';
+                return;
+            }
+
+            // Spinner
+            const iconoOriginal = btnIA.innerHTML;
+            btnIA.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            btnIA.disabled = true;
+
+            fetch(`/api/predecir/?texto=${encodeURIComponent(texto)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.categoria) {
+                        // Nota: La API devuelve "categoria" pero buscamos en el select de "clasificacion"
+                        let encontrada = false;
+                        for (let i = 0; i < selectClas.options.length; i++) {
+                            if (selectClas.options[i].text.toLowerCase() === data.categoria.toLowerCase()) {
+                                selectClas.selectedIndex = i;
+                                encontrada = true;
+                                break;
+                            }
+                        }
+
+                        if (encontrada) {
+                            feedback.innerHTML = `<span class="text-success fw-bold">¡Sugerido: ${data.categoria}!</span>`;
+                            selectClas.style.backgroundColor = "#d1e7dd";
+                            setTimeout(() => selectClas.style.backgroundColor = "", 1000);
+                        } else {
+                            feedback.innerHTML = `<span class="text-muted">La IA sugiere "${data.categoria}", pero no está en la lista.</span>`;
+                        }
+                    } else {
+                        feedback.innerHTML = '<span class="text-muted">No estoy seguro. Clasifica manual y aprenderé.</span>';
+                        fetch('/api/entrenar-ia/');
+                    }
+                })
+                .catch(err => feedback.innerHTML = 'Error de conexión IA')
+                .finally(() => {
+                    btnIA.innerHTML = iconoOriginal;
+                    btnIA.disabled = false;
+                });
+        });
+    });
+</script>
+{% endblock %}

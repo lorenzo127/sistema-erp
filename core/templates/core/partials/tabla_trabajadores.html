@@ -1,0 +1,65 @@
+{% load humanize %}
+{% load custom_filters %}
+
+{% for t in lista_trabajadores %}
+<tr>
+    <td>
+        <div>
+            <div class="fw-bold text-dark">{{ t.nombre }}</div>
+            <div class="small text-muted" style="font-size: 0.75rem;">
+                {% if "Maquehue" in t.empresa.nombre %}
+                    <span class="text-success"><i class="bi bi-circle-fill" style="font-size: 6px;"></i> MQ</span>
+                {% else %}
+                    <span class="text-info"><i class="bi bi-circle-fill" style="font-size: 6px;"></i> SM</span>
+                {% endif %}
+            </div>
+        </div>
+    </td>
+
+    <td class="font-monospace text-muted small text-nowrap">{{ t.rut }}</td>
+
+    <td>{{ t.cargo }}</td>
+
+    <td class="text-nowrap">{{ t.fecha_contrato|date:"d/m/Y"|default:"-" }}</td>
+
+    <td class="text-center">
+        {% if t.fecha_finiquito %}
+            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">Finiquitado</span>
+            <div class="small text-danger mt-1 text-nowrap" style="font-size: 0.7rem;">{{ t.fecha_finiquito|date:"d/m/Y" }}</div>
+        {% else %}
+            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Vigente</span>
+        {% endif %}
+    </td>
+
+    <td class="text-end fw-bold font-monospace">
+        {% if t.monto_finiquito > 0 %}
+            ${{ t.monto_finiquito|dinero_hibrido }}
+        {% else %}
+            <span class="text-muted">-</span>
+        {% endif %}
+    </td>
+
+    <td class="text-end text-muted small text-nowrap">
+        {% if t.tiempo_servicio != "-" %}
+            {{ t.tiempo_servicio }}
+        {% else %}
+            -
+        {% endif %}
+    </td>
+
+    <td class="text-center">
+        <div class="btn-group shadow-sm">
+            <a href="{% url 'editar_trabajador' t.id %}" class="btn btn-sm btn-light border text-warning hover-scale" title="Editar">
+                <i class="bi bi-pencil-square"></i>
+            </a>
+        </div>
+    </td>
+</tr>
+{% empty %}
+<tr>
+    <td colspan="8" class="text-center py-5 text-muted">
+        <i class="bi bi-folder2-open fs-1 d-block mb-2"></i>
+        No hay trabajadores registrados.
+    </td>
+</tr>
+{% endfor %}

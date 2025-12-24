@@ -1,0 +1,22 @@
+# .gitignore
+
+# Python y Django basura
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Base de datos (¡IMPORTANTE: No subir!)
+db.sqlite3
+
+# Entorno Virtual (si lo tienes en la carpeta)
+venv/
+env/
+.env
+
+# Archivos estáticos recolectados
+static/
+staticfiles/
+media/
+
+.env
+

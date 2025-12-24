@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte Caja Chica</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @frame footer_frame {           /* Footer estático */
+                -pdf-frame-content: footerContent;
+                bottom: 1cm;
+                margin-left: 2cm;
+                margin-right: 2cm;
+                height: 1cm;
+            }
+        }
+        body { font-family: Helvetica, Arial, sans-serif; color: #333; }
+        
+        /* CABECERA */
+        .header-table { width: 100%; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 20px; }
+        .logo-img { height: 50px; } /* Ajusta el tamaño de tu logo aquí */
+        .title { text-align: right; font-size: 18pt; font-weight: bold; color: #333; text-transform: uppercase; }
+        .subtitle { text-align: right; font-size: 10pt; color: #666; margin-top: 5px; }
+        
+        /* CUADROS RESUMEN (Como en tu captura) */
+        .summary-table { width: 100%; margin-bottom: 30px; border: 1px solid #ddd; }
+        .summary-table td { padding: 10px; border: 1px solid #ddd; width: 25%; vertical-align: middle; }
+        .label { font-weight: bold; font-size: 9pt; text-transform: uppercase; color: #444; }
+        .amount { font-size: 12pt; text-align: right; color: #666; }
+        .amount.negative { color: #dc3545; } /* Rojo para gastos */
+        .amount.total { font-weight: bold; color: #000; }
+
+        /* TABLA DE MOVIMIENTOS */
+        .details-header { font-size: 12pt; font-weight: bold; margin-bottom: 10px; color: #333; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { background-color: #004085; color: white; padding: 8px; text-align: left; font-size: 9pt; }
+        .data-table td { padding: 8px; border-bottom: 1px solid #eee; font-size: 9pt; }
+        
+        /* FOOTER */
+        #footerContent { text-align: center; font-size: 8pt; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <table class="header-table">
+        <tr>
+            <td width="50%" valign="middle">
+                    <img src="{{ logo_path }}" class="logo-img">      
+              </td>
+            <td width="50%" valign="middle">
+                <div class="title">Rendición de Caja Chica</div>
+                <div class="subtitle">
+                    Departamento de Contabilidad<br>
+                    Fecha de Emisión: {{ fecha_emision|date:"d/m/Y" }}
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <table class="summary-table">
+        <tr>
+            <td>
+                <div class="label">Fondo Fijo:</div>
+            </td>
+            <td>
+                <div class="amount">${{ fondo_fijo }}</div>
+            </td>
+            <td>
+                <div class="label">Saldo Anterior:</div>
+            </td>
+            <td>
+                <div class="amount">${{ saldo_anterior }}</div>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <div class="label">Gastos Hoy:</div>
+            </td>
+            <td>
+                <div class="amount negative">- ${{ gastos_hoy }}</div>
+            </td>
+            <td>
+                <div class="label">Saldo Actual:</div>
+            </td>
+            <td>
+                <div class="amount total">${{ saldo_actual }}</div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="details-header">Detalle de Movimientos ({{ fecha_emision|date:"d F Y" }})</div>
+    
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>N° Doc</th>
+                <th>Descripción / Responsable</th>
+                <th style="text-align: right;">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movimientos %}
+            <tr>
+                <td>{{ m.clasificacion.nombre|default:"GASTO" }}</td>
+                <td>{{ m.n_documento|default:"-" }}</td>
+                <td>
+                    {{ m.empresa.nombre }}<br>
+                    <span style="color: #666; font-style: italic; font-size: 8pt;">Resp: {{ m.centro_costo.nombre }}</span>
+                </td>
+                <td style="text-align: right;">${{ m.monto_transferencia }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="4" style="text-align: center; padding: 20px;">No hay movimientos registrados hoy.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div id="footerContent">
+        Generado por Finanzas ERP - Usuario: {{ usuario.username }} - Pág <pdf:pagenumber>
+    </div>
+
+</body>
+</html>

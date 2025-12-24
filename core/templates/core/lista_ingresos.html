@@ -1,0 +1,264 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% load custom_filters %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="text-dark fw-bold m-0">Reporte de Egresos</h3>
+            <p class="text-muted small m-0">Gestión inteligente de gastos</p>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <a href="{% url 'importar_excel' %}" class="btn btn-primary shadow-sm">
+                <i class="bi bi-file-earmark-spreadsheet-fill me-2"></i>Importar Excel
+            </a>
+            <a href="{% url 'nuevo_ingreso' %}" class="btn btn-success text-white fw-bold shadow-sm">
+                <i class="bi bi-plus-lg me-2"></i>Nuevo Gasto
+            </a>
+            <button class="btn btn-white border shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#submenuFiltros">
+                <i class="bi bi-funnel-fill me-2 text-secondary"></i>Filtros
+            </button>
+        </div>
+    </div>
+
+    <div class="collapse mb-4 {% if filtros_activos %}show{% endif %}" id="submenuFiltros">
+        <div class="card shadow-sm border-0 bg-white" style="border-radius: 12px;">
+            <div class="card-body p-4">
+                <form id="filtroForm" method="get">
+                    <input type="hidden" name="page" id="page" value="1">
+
+                    <div class="row g-3">
+<div class="col-md-12 d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
+    <span class="text-primary fw-bold small text-uppercase"><i class="bi bi-sliders me-1"></i> Configuración de Vista</span>
+    
+    <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <label class="small fw-bold text-muted">Ordenar:</label>
+            <select name="orden" class="form-select form-select-sm border-0 bg-light fw-bold" style="width: 140px;" onchange="cambiarPagina(1)">
+                <option value="fecha_desc" {% if orden_sel == 'fecha_desc' %}selected{% endif %}>📅 Más recientes</option>
+                <option value="fecha_asc" {% if orden_sel == 'fecha_asc' %}selected{% endif %}>📅 Más antiguos</option>
+                <option value="monto_desc" {% if orden_sel == 'monto_desc' %}selected{% endif %}>💰 Mayor monto</option>
+                <option value="monto_asc" {% if orden_sel == 'monto_asc' %}selected{% endif %}>💰 Menor monto</option>
+            </select>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <label class="small fw-bold text-muted">Filas:</label>
+            <select name="per_page" class="form-select form-select-sm border-0 bg-light fw-bold" style="width: 70px;" onchange="cambiarPagina(1)">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+            </select>
+        </div>
+    </div>
+</div>
+                        
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">Empresa</label>
+                            <select name="empresa" class="form-select form-select-sm" onchange="cambiarPagina(1)">
+                                <option value="">Todas</option>
+                                {% for item in empresas %}
+                                    <option value="{{ item.id }}" {% if empresa_sel == item.id %}selected{% endif %}>{{ item.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">Centro de Costo</label>
+                            <select name="centro" class="form-select form-select-sm" onchange="cambiarPagina(1)">
+                                <option value="">Todos</option>
+                                {% for item in centros %}
+                                    <option value="{{ item.id }}" {% if centro_sel == item.id %}selected{% endif %}>{{ item.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-secondary">Clasificación</label>
+                            <select name="clasificacion" class="form-select form-select-sm" onchange="cambiarPagina(1)">
+                                <option value="">Todas</option>
+                                {% for item in clasificaciones %}
+                                    <option value="{{ item.id }}" {% if clasif_sel == item.id %}selected{% endif %}>{{ item.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Desde</label>
+                            <input type="date" name="fecha_inicio" class="form-control form-control-sm" value="{{ inicio_sel|default:'' }}" onchange="cambiarPagina(1)">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Hasta</label>
+                            <input type="date" name="fecha_fin" class="form-control form-control-sm" value="{{ fin_sel|default:'' }}" onchange="cambiarPagina(1)">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Mínimo ($)</label>
+                            <input type="number" name="min_costo" class="form-control form-control-sm" value="{{ min_sel|default:'' }}" onchange="cambiarPagina(1)">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-secondary">Máximo ($)</label>
+                            <input type="number" name="max_costo" class="form-control form-control-sm" value="{{ max_sel|default:'' }}" onchange="cambiarPagina(1)">
+                        </div>
+
+                        <div class="col-12 text-end mt-2">
+                            <a href="{% url 'lista_ingresos' %}" class="btn btn-light btn-sm me-2 border text-muted">Limpiar</a>
+                            <button type="button" class="btn btn-primary btn-sm px-4 fw-bold shadow-sm" onclick="cambiarPagina(1)">
+                                <i class="bi bi-search me-2"></i>Aplicar
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 fw-bold text-primary">
+                <i class="bi bi-activity me-2"></i>Tendencia de Gastos
+            </h6>
+            <span class="badge bg-primary bg-opacity-10 text-primary">Dinámico</span>
+        </div>
+        <div class="card-body">
+            <div style="height: 250px; width: 100%;">
+                <canvas id="graficoIngresos"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow border-0" style="border-radius: 12px; overflow: hidden;">
+        <div class="card-body p-0">
+            <div class="table-responsive" id="tabla-container" style="max-height: 70vh; overflow-y: auto;">
+                <div id="tabla-body">
+                    {% include 'core/partials/tabla_ingresos.html' %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-footer bg-white border-top p-3" id="paginacion-container">
+            {% include 'core/partials/paginacion.html' %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    let myChart = null;
+
+    // 1. Inicializar al cargar la página
+    $(document).ready(function() {
+        const labelsIniciales = {{ labels_grafico|safe|default:"[]" }};
+        const dataInicial = {{ data_grafico|safe|default:"[]" }};
+        
+        initChart(labelsIniciales, dataInicial);
+    });
+
+    // 2. Función para construir/actualizar el gráfico
+    function initChart(labels, dataValues) {
+        const ctx = document.getElementById('graficoIngresos').getContext('2d');
+        
+        if (myChart) {
+            myChart.destroy();
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Monto Total',
+                    data: dataValues,
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                    borderWidth: 2,
+                    pointRadius: 3, // Puntos pequeños normales
+                    pointHoverRadius: 6, // Puntos grandes al pasar el mouse
+                    pointBackgroundColor: '#4e73df',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                
+                // --- AQUÍ ESTÁ LA MEJORA QUE PEDISTE ---
+                interaction: {
+                    mode: 'index',    // Muestra el dato de toda la columna (fecha), no solo del punto
+                    intersect: false, // No obliga a tocar el punto exacto, basta con pasar cerca
+                },
+                
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.9)', // Fondo blanco
+                        titleColor: '#6e707e',
+                        bodyColor: '#2e59d9',
+                        borderColor: '#dddfeb',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label: function(context) {
+                                // Formato de moneda Chilena ($1.000.000)
+                                return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { 
+                        grid: { display: false },
+                        ticks: { maxTicksLimit: 12 }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        grid: { borderDash: [2, 4], color: "#eaecf4" },
+                        ticks: {
+                            callback: function(value) {
+                                return '$' + value.toLocaleString('es-CL');
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 3. Función AJAX (Igual que antes)
+    function cambiarPagina(numeroPagina) {
+        $('#page').val(numeroPagina);
+        
+        $('#tabla-body').css('opacity', '0.4');
+        $('#paginacion-container').css('opacity', '0.4');
+        $('canvas').css('opacity', '0.4');
+
+        var formData = $('#filtroForm').serialize() + '&modo_ajax=true';
+
+        $.ajax({
+            url: "{% url 'lista_ingresos' %}",
+            data: formData,
+            success: function(response) {
+                $('#tabla-body').html(response.html_tabla);
+                $('#paginacion-container').html(response.html_paginacion);
+                
+                initChart(response.grafico_labels, response.grafico_data);
+                
+                $('#tabla-body').css('opacity', '1');
+                $('#paginacion-container').css('opacity', '1');
+                $('canvas').css('opacity', '1');
+                $('#tabla-container').scrollTop(0);
+            },
+            error: function() {
+                alert('Error al cargar datos.');
+                $('#tabla-body').css('opacity', '1');
+                $('canvas').css('opacity', '1');
+            }
+        });
+    }
+</script>
+{% endblock %}

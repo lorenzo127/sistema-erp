@@ -1,0 +1,292 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
+        <div>
+            <h3 class="fw-bold text-dark m-0">Panel de Control</h3>
+            <p class="text-muted small m-0">Resumen general de finanzas</p>
+        </div>
+
+        <form method="get" class="d-flex gap-2 bg-white p-2 rounded shadow-sm">
+            <select name="anio" class="form-select form-select-sm border-0 bg-light fw-bold" style="width: 100px;">
+                <option value="">Todo Año</option>
+                {% for anio in anios_disponibles %}
+                    <option value="{{ anio.year }}" {% if anio_seleccionado == anio.year %}selected{% endif %}>
+                        {{ anio.year }}
+                    </option>
+                {% endfor %}
+            </select>
+            
+            <select name="mes" class="form-select form-select-sm border-0 bg-light fw-bold" style="width: 110px;">
+                <option value="">Todo Mes</option>
+                <option value="1" {% if mes_seleccionado == 1 %}selected{% endif %}>Enero</option>
+                <option value="2" {% if mes_seleccionado == 2 %}selected{% endif %}>Febrero</option>
+                <option value="3" {% if mes_seleccionado == 3 %}selected{% endif %}>Marzo</option>
+                <option value="4" {% if mes_seleccionado == 4 %}selected{% endif %}>Abril</option>
+                <option value="5" {% if mes_seleccionado == 5 %}selected{% endif %}>Mayo</option>
+                <option value="6" {% if mes_seleccionado == 6 %}selected{% endif %}>Junio</option>
+                <option value="7" {% if mes_seleccionado == 7 %}selected{% endif %}>Julio</option>
+                <option value="8" {% if mes_seleccionado == 8 %}selected{% endif %}>Agosto</option>
+                <option value="9" {% if mes_seleccionado == 9 %}selected{% endif %}>Septiembre</option>
+                <option value="10" {% if mes_seleccionado == 10 %}selected{% endif %}>Octubre</option>
+                <option value="11" {% if mes_seleccionado == 11 %}selected{% endif %}>Noviembre</option>
+                <option value="12" {% if mes_seleccionado == 12 %}selected{% endif %}>Diciembre</option>
+            </select>
+
+            <button type="submit" class="btn btn-primary btn-sm fw-bold">
+                <i class="bi bi-filter"></i>
+            </button>
+        </form>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-4 border-primary h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-uppercase small fw-bold text-primary mb-1">Total Egresos</div>
+                            <div class="h3 mb-0 fw-bold text-gray-800">${{ total_monto|intcomma }}</div>
+                        </div>
+                        <div class="bg-primary bg-opacity-10 p-3 rounded text-primary">
+                            <i class="bi bi-wallet2 fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-4 border-success h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-uppercase small fw-bold text-success mb-1">Promedio Gasto</div>
+                            <div class="h3 mb-0 fw-bold text-gray-800">${{ promedio_monto|intcomma }}</div>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded text-success">
+                            <i class="bi bi-graph-up-arrow fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0 border-start border-4 border-warning h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-uppercase small fw-bold text-warning mb-1">Movimientos</div>
+                            <div class="h3 mb-0 fw-bold text-gray-800">{{ total_registros }}</div>
+                        </div>
+                        <div class="bg-warning bg-opacity-10 p-3 rounded text-warning">
+                            <i class="bi bi-receipt fs-3"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-white py-3">
+            <h6 class="m-0 fw-bold text-primary">Evolución de Gastos en el Tiempo</h6>
+        </div>
+        <div class="card-body">
+            <div style="height: 300px;">
+                <canvas id="chartEvolucion"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 fw-bold text-primary">Distribución por Empresa</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 250px;">
+                        <canvas id="chartEmpresas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3">
+                    <h6 class="m-0 fw-bold text-primary">Gastos por Clasificación</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 250px;">
+                        <canvas id="chartClasificacion"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    // Configuración Global para moneda Chilena
+    const clpFormatter = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' });
+
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // --- 1. GRÁFICO DE EVOLUCIÓN (LÍNEA) ---
+        const ctxEvol = document.getElementById('chartEvolucion').getContext('2d');
+        const chartEvolucion = new Chart(ctxEvol, {
+            type: 'line',
+            data: {
+                labels: {{ labels_evolucion|safe|default:"[]" }},
+                datasets: [{
+                    label: 'Monto Gastado',
+                    data: {{ data_evolucion|safe|default:"[]" }},
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.05)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#4e73df',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                        titleColor: '#6e707e',
+                        bodyColor: '#4e73df',
+                        borderColor: '#dddfeb',
+                        borderWidth: 1,
+                        padding: 10,
+                        callbacks: {
+                            label: function(context) {
+                                return clpFormatter.format(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        beginAtZero: true,
+                        grid: { borderDash: [2, 4], color: "#eaecf4" },
+                        ticks: {
+                            callback: function(value) { return '$' + value.toLocaleString('es-CL'); }
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- 2. GRÁFICO DE EMPRESAS (DONUT) ---
+        const ctxEmp = document.getElementById('chartEmpresas').getContext('2d');
+        const chartEmpresas = new Chart(ctxEmp, {
+            type: 'doughnut',
+            data: {
+                labels: {{ labels_empresas|safe|default:"[]" }},
+                datasets: [{
+                    data: {{ data_empresas|safe|default:"[]" }},
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b'],
+                    hoverBorderColor: "rgba(234, 236, 244, 1)",
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.label || '';
+                                let value = context.parsed;
+                                return label + ': ' + clpFormatter.format(value);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- 3. GRÁFICO DE CLASIFICACIÓN (BARRAS) ---
+        const ctxClas = document.getElementById('chartClasificacion').getContext('2d');
+        const chartClas = new Chart(ctxClas, {
+            type: 'bar',
+            data: {
+                labels: {{ labels_clasificacion|safe|default:"[]" }},
+                datasets: [{
+                    label: 'Monto',
+                    data: {{ data_clasificacion|safe|default:"[]" }},
+                    backgroundColor: '#36b9cc',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return clpFormatter.format(context.parsed.y);
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        beginAtZero: true,
+                        grid: { borderDash: [2, 4], color: "#eaecf4" },
+                        ticks: {
+                            callback: function(value) { return '$' + value.toLocaleString('es-CL'); }
+                        }
+                    }
+                }
+            }
+        });
+
+        // =========================================================
+        // FIX PARA EL MENÚ HAMBURGUESA (SIDEBAR)
+        // =========================================================
+        // Este código detecta clic en CUALQUIER botón que pueda ser el del menú
+        // y obliga a los gráficos a recalcular su tamaño 3 veces seguidas
+        // para asegurarse de que calcen perfecto con la animación.
+        
+        const botonesMenu = document.querySelectorAll("#sidebarToggle, #sidebarToggleTop, .sidebar-toggle");
+        
+        botonesMenu.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // Disparo inmediato
+                setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 50);
+                // A mitad de animación
+                setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 200);
+                // Al final de la animación
+                setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 400);
+            });
+        });
+
+    });
+</script>
+{% endblock %}

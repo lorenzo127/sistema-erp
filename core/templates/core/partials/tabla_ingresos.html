@@ -1,0 +1,96 @@
+{% load humanize %}
+{% load custom_filters %}
+
+<table class="table table-hover align-middle w-100" style="font-size: 0.95rem;">
+    <thead class="table-light" style="position: sticky; top: 0; z-index: 10;">
+        <tr>
+            <th style="min-width: 100px;">Fecha</th>
+            
+            {% if not empresa_sel %}
+                <th>Empresa</th>
+            {% endif %}
+
+            {% if not centro_sel %}
+                <th>Centro Costo</th>
+            {% endif %}
+
+            {% if not clasif_sel %}
+                <th>Clasificación</th>
+            {% endif %}
+
+            <th style="width: 30%;">Descripción</th>
+            <th class="text-end">Monto</th>
+            <th class="text-center" style="width: 100px;">Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for ingreso in ingresos %}
+        <tr>
+            <td class="text-nowrap" data-order="{{ ingreso.fecha|date:'Y-m-d' }}">
+                {{ ingreso.fecha|date:"d/m/Y" }}
+            </td>
+            
+            {% if not empresa_sel %}
+                <td class="fw-bold text-primary text-nowrap">
+                    {{ ingreso.empresa.nombre|default:"Sin Asignar" }}
+                </td>
+            {% endif %}
+            
+            {% if not centro_sel %}
+                <td>
+                    <span class="badge bg-light text-dark border text-wrap">
+                        {{ ingreso.centro_costo.nombre|default:"-" }}
+                    </span>
+                </td>
+            {% endif %}
+            
+            {% if not clasif_sel %}
+                <td>
+                    <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
+                        {{ ingreso.clasificacion.nombre|default:"-" }}
+                    </span>
+                </td>
+            {% endif %}
+            
+            <td class="text-muted small">
+                <div style="max-height: 40px; overflow-y: auto;">
+                    {{ ingreso.descripcion_movimiento }}
+                </div>
+            </td>
+            
+            <td class="text-end fw-bold font-monospace text-nowrap fs-6">
+                ${{ ingreso.monto_transferencia|dinero_hibrido }}
+            </td>
+            
+            <td class="text-center">
+                <div class="btn-group shadow-sm" role="group">
+                    <a href="{% url 'editar_ingreso' ingreso.id %}" class="btn btn-sm btn-light border text-warning hover-scale" title="Editar">
+                        <i class="bi bi-pencil-square"></i>
+                    </a>
+                    <a href="{% url 'eliminar_ingreso' ingreso.id %}" 
+                    class="btn btn-outline-danger btn-sm btn-eliminar" 
+                    title="Eliminar">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                </div>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="10" class="text-center py-5 text-muted bg-light">
+                <div class="py-4">
+                    <i class="bi bi-inbox fs-1 d-block mb-3 text-secondary opacity-50"></i>
+                    <h5 class="fw-normal">No se encontraron registros</h5>
+                    <p class="small mb-0">Intenta ajustar los filtros de búsqueda</p>
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<style>
+    /* Efecto hover suave para los botones de acción */
+    .hover-scale { transition: transform 0.2s; }
+    .hover-scale:hover { transform: scale(1.15); z-index: 5; }
+</style>

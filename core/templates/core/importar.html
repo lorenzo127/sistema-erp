@@ -1,0 +1,119 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-success text-white py-3">
+                    <h5 class="m-0 fw-bold"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Cargar Planilla</h5>
+                </div>
+                <div class="card-body p-4">
+                    <p class="text-muted small mb-4">
+                        Seleccione el archivo <strong>.xlsx</strong> o <strong>.xls</strong> con los movimientos bancarios para procesarlos masivamente.
+                    </p>
+
+                    <form method="post" enctype="multipart/form-data" id="formCarga">
+                        {% csrf_token %}
+                        
+                        {{ form|crispy }}
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-success fw-bold" id="btnSubir">
+                                <span id="textoBtn"><i class="bi bi-cloud-upload me-2"></i>Procesar Archivo</span>
+                                <span id="spinnerBtn" class="d-none">
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Procesando...
+                                </span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="alert alert-light border mt-4 d-flex align-items-start small text-muted">
+                        <i class="bi bi-shield-lock me-2 fs-5"></i>
+                        <div>
+                            El sistema validará automáticamente duplicados basándose en el <strong>N° de Documento</strong>.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="m-0 fw-bold text-dark">Requisitos del Formato</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">Para evitar errores, asegúrese de que su Excel cumpla con esta estructura:</p>
+
+                    <div class="table-responsive border rounded mb-3">
+                        <table class="table table-sm table-bordered mb-0" style="font-size: 12px;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Fila 6</th>
+                                    <th>A: Fecha</th>
+                                    <th>B: N° Doc</th>
+                                    <th>C: Empresa</th>
+                                    <th>D: Monto...</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted">Dato</td>
+                                    <td>01/10/2025</td>
+                                    <td>12345</td>
+                                    <td>Entel</td>
+                                    <td>$50.000</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <ul class="list-group list-group-flush small">
+                        <li class="list-group-item px-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Hoja:</strong> Debe llamarse <code>REGISTRO EGRESOS</code>.
+                        </li>
+                        <li class="list-group-item px-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Encabezados:</strong> Deben estar en la <strong>Fila 6</strong> (el sistema lee desde ahí).
+                        </li>
+                        <li class="list-group-item px-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Fechas:</strong> Formato fecha corta (dd/mm/aaaa). Evite texto.
+                        </li>
+                        <li class="list-group-item px-0">
+                            <i class="bi bi-check-circle-fill text-success me-2"></i>
+                            <strong>Catálogos:</strong> Si una <em>Empresa</em> o <em>Centro de Costo</em> no existe, el sistema lo creará automáticamente.
+                        </li>
+                    </ul>
+
+                                <div class="mb-4">
+                <p class="text-muted">
+                    ¿No tienes el formato? Descarga la plantilla oficial aquí:
+                </p>
+                <a href="{% url 'descargar_plantilla' %}" class="btn btn-outline-success">
+                    <i class="fas fa-file-excel"></i> Descargar Plantilla Ejemplo
+                </a>
+            </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.getElementById('formCarga').addEventListener('submit', function() {
+        // Ocultar texto normal
+        document.getElementById('textoBtn').classList.add('d-none');
+        // Mostrar spinner
+        document.getElementById('spinnerBtn').classList.remove('d-none');
+        // Deshabilitar botón para evitar doble clic
+        document.getElementById('btnSubir').disabled = true;
+    });
+</script>
+{% endblock %}
