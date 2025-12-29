@@ -4,13 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso RUT | Sistema ERP</title>
+    <title>Admin | Sistema ERP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     
     <style>
+        /* ESTILO DIFERENTE: FONDO OSCURO PARA ADMIN */
         body {
-            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            background: linear-gradient(135deg, #232526 0%, #414345 100%); /* Gris oscuro profesional */
             height: 100vh;
             display: flex;
             align-items: center;
@@ -19,24 +20,25 @@
         .card-login {
             border: none;
             border-radius: 1rem;
-            box-shadow: 0 0.5rem 1rem 0 rgba(0, 0, 0, 0.2);
+            box-shadow: 0 0.5rem 1rem 0 rgba(0, 0, 0, 0.5);
             overflow: hidden;
             width: 100%;
             max-width: 420px;
         }
         .card-header {
-            background-color: #fff;
-            border-bottom: none;
+            background-color: #212529; /* Cabecera negra */
+            color: white;
+            border-bottom: 4px solid #dc3545; /* Línea roja de "Peligro/Admin" */
             padding-top: 2rem;
             text-align: center;
         }
         .login-icon {
             font-size: 3rem;
-            color: #4e73df;
+            color: #dc3545; /* Icono rojo */
         }
         .btn-login {
-            background-color: #4e73df;
-            border-color: #4e73df;
+            background-color: #212529;
+            border-color: #212529;
             font-size: 1.1rem;
             font-weight: bold;
             letter-spacing: 0.05rem;
@@ -44,11 +46,10 @@
             transition: all 0.2s;
         }
         .btn-login:hover {
-            background-color: #2e59d9;
-            border-color: #2653d4;
+            background-color: #dc3545; /* Al pasar el mouse se pone rojo */
+            border-color: #dc3545;
             transform: translateY(-1px);
         }
-        /* Estilos específicos para el RUT */
         .dv-box {
             background-color: #e9ecef;
             font-weight: bold;
@@ -66,26 +67,24 @@
                 <div class="card card-login">
                     <div class="card-header">
                         <div class="mb-3">
-                            <i class="bi bi-person-badge-fill login-icon"></i>
-                        </div>
-                        <h4 class="fw-bold text-dark">Acceso Corporativo</h4>
-                        <p class="text-muted small">Ingrese su RUT para continuar</p>
+                            <i class="bi bi-shield-lock-fill login-icon"></i> </div>
+                        <h4 class="fw-bold">Administración</h4>
+                        <p class="small text-white-50">Acceso restringido al sistema</p>
                     </div>
                     
-                    <div class="card-body p-4">
+                    <div class="card-body p-4 bg-white">
                         {% if form.errors %}
                             <div class="alert alert-danger d-flex align-items-center mb-3 small" role="alert">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                <div>Credenciales incorrectas</div>
+                                <div>Credenciales de Admin incorrectas</div>
                             </div>
                         {% endif %}
 
                         <form method="POST" id="loginForm">
                             {% csrf_token %}
-                            
                             <input type="hidden" name="username" id="id_username">
 
-                            <label class="form-label text-muted small fw-bold"><i class="bi bi-card-heading me-1"></i> RUT DEL USUARIO</label>
+                            <label class="form-label text-muted small fw-bold">RUT ADMINISTRADOR</label>
                             <div class="input-group mb-3">
                                 <input type="number" class="form-control form-control-lg" id="rut_numero" placeholder="Ej: 11222333" required autofocus>
                                 <span class="input-group-text bg-white border-end-0">-</span>
@@ -94,19 +93,12 @@
 
                             <div class="form-floating mb-3">
                                 <input type="password" name="password" class="form-control" id="id_password" placeholder="Contraseña" required>
-                                <label for="id_password"><i class="bi bi-lock me-1"></i> Contraseña</label>
+                                <label for="id_password"><i class="bi bi-key-fill me-1"></i> Contraseña</label>
                             </div>
 
-                            <div class="form-check mb-3">
-                                <input class="form-check-input" type="checkbox" name="recuerdame" id="customCheck">
-                                <label class="form-check-label text-secondary small" for="customCheck">
-                                    Recuérdame
-                                </label>
-                            </div>
-
-                            <div class="d-grid">
+                            <div class="d-grid mt-4">
                                 <button class="btn btn-primary btn-login text-uppercase shadow-sm" type="submit">
-                                    Ingresar
+                                    Entrar al Panel
                                 </button>
                             </div>
                         </form>
@@ -124,50 +116,37 @@
             const inputHiddenUsername = document.getElementById('id_username');
             const form = document.getElementById('loginForm');
 
-            // Función Módulo 11 para calcular DV
             function calcularDV(rut) {
                 if (!rut || rut.length < 1) return '';
-                
                 let suma = 0;
                 let multiplicador = 2;
-                
-                // Recorrer el RUT de atrás hacia adelante
                 for (let i = rut.length - 1; i >= 0; i--) {
                     suma += parseInt(rut.charAt(i)) * multiplicador;
                     multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
                 }
-                
                 let resto = suma % 11;
                 let dv = 11 - resto;
-                
                 if (dv === 11) return '0';
                 if (dv === 10) return 'K';
                 return dv.toString();
             }
 
-            // Escuchar cuando el usuario escribe
             inputNumero.addEventListener('input', function() {
-                // 1. Limpiar caracteres no numéricos
                 let valor = this.value.replace(/[^0-9]/g, '');
-                
-                // 2. Limitar largo (opcional, ej: 8 dígitos)
                 if (valor.length > 9) valor = valor.slice(0, 9);
                 this.value = valor;
 
-                // 3. Calcular y mostrar DV
                 if (valor.length > 0) {
                     const dv = calcularDV(valor);
                     inputDv.value = dv;
-                    
-                    // 4. Llenar el campo oculto para Django (Ej: 11222333-4)
-                    inputHiddenUsername.value = valor + '-' + dv;
+                    // IMPORTANTE: Con guion para que coincida con el admin
+                    inputHiddenUsername.value = valor + '-' + dv; 
                 } else {
                     inputDv.value = '';
                     inputHiddenUsername.value = '';
                 }
             });
 
-            // Validación al enviar (Prevenir envío si falta RUT)
             form.addEventListener('submit', function(e) {
                 if (inputNumero.value.length < 1) {
                     e.preventDefault();

@@ -6,8 +6,16 @@ from django.core.exceptions import ValidationError
 from django.db.models import Q
 
 # Importamos todos los modelos en una sola línea para mantener el orden
-from .models import Ingreso, CajaChica, Trabajador, Empresa
-
+from .models import (
+    Ingreso, 
+    Trabajador, 
+    CajaChica, 
+    Empresa, 
+    CentroCosto, 
+    Clasificacion, 
+    Producto, 
+    Lote
+)
 class CargaExcelForm(forms.Form):
     archivo_excel = forms.FileField(label="Selecciona tu archivo Excel")
 
@@ -148,3 +156,27 @@ class TrabajadorForm(forms.ModelForm):
 
         # 6. Devolver RUT formateado
         return f"{int(cuerpo):,}".replace(',', '.') + "-" + dv
+    
+class LoteForm(forms.ModelForm):
+    class Meta:
+        model = Lote
+        fields = ['producto', 'numero_lote', 'fecha_vencimiento', 'cantidad']
+        widgets = {
+            'producto': forms.Select(attrs={'class': 'form-select'}),
+            'numero_lote': forms.TextInput(attrs={'class': 'form-control'}),
+            'fecha_vencimiento': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-control'}),
+        }
+
+
+class SalidaStockForm(forms.Form):
+    producto = forms.ModelChoiceField(
+        queryset=Producto.objects.all(),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="Producto a Despachar"
+    )
+    cantidad = forms.IntegerField(
+        min_value=1,
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        label="Cantidad (Unidades)"
+    )

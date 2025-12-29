@@ -39,4 +39,16 @@ urlpatterns = [
 
     path('api/entrenar-ia/', views.api_entrenar_ia, name='api_entrenar_ia'),
     path('api/predecir/', views.api_predecir_categoria, name='api_predecir_categoria'),
+
+    path('finanzas/', views.finanzas_dashboard, name='finanzas_dashboard'),
+    path('finanzas/importar/', views.importar_finanzas, name='importar_finanzas'),
+
+    path('inventario/', views.inventario_dashboard, name='inventario_dashboard'),
+    path('inventario/nuevo-lote/', views.ingresar_lote, name='ingresar_lote'),
+    path('inventario/salida/', views.salida_stock, name='salida_stock'),
+    path('inventario/enviar-alerta/', views.enviar_alerta_vencimientos, name='enviar_alerta'),
+
+    path('datos/', views.centro_datos, name='centro_datos'),
+    path('datos/exportar-finanzas/', views.exportar_finanzas_csv, name='export_finanzas'),
+    path('datos/exportar-stock/', views.exportar_inventario_csv, name='export_stock'),
 ]

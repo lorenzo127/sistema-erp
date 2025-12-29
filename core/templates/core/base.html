@@ -148,6 +148,19 @@
 
             <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Finanzas</div>
 
+                        <li class="nav-item">
+                <a class="nav-link" href="{% url 'centro_datos' %}">
+                    <i class="bi bi-graph-up-arrow"></i>
+                    <span>Data & Reportes</span>
+                </a>
+            </li>
+            
+            <a class="nav-link {% if 'finanzas' in request.resolver_match.url_name %}active{% endif %}" 
+               href="{% url 'finanzas_dashboard' %}">
+                <i class="bi bi-pie-chart-fill"></i>
+                <span>Panel Financiero</span>
+            </a>
+
             <a class="nav-link {% if 'ingreso' in request.resolver_match.url_name %}active{% endif %}" 
                href="{% url 'lista_ingresos' %}">
                 <i class="bi bi-cash-stack"></i>
@@ -167,6 +180,15 @@
                 <i class="bi bi-people-fill"></i>
                 <span>Recursos Humanos</span>
             </a>
+
+            <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Logística</div>
+
+            <a class="nav-link {% if 'inventario' in request.resolver_match.url_name %}active{% endif %}" 
+               href="{% url 'inventario_dashboard' %}">
+                <i class="bi bi-box-seam-fill"></i>
+                <span>Control de Stock</span>
+            </a>
+
         </div>
 
         <div class="mt-auto p-3">
@@ -246,7 +268,7 @@
                 $('#sidebar').toggleClass('toggled');
             });
 
-            // --- 2. FIX GRÁFICOS (MutationObserver) ---
+            // --- 2. FIX GRÁFICOS ---
             const sidebarElement = document.getElementById('sidebar');
             if (sidebarElement) {
                 const observer = new MutationObserver(function(mutations) {
@@ -261,7 +283,7 @@
                 observer.observe(sidebarElement, { attributes: true });
             }
 
-            // --- 3. SWEETALERT: CONFIGURACIÓN TOAST (NOTIFICACIONES) ---
+            // --- 3. TOAST NOTIFICACIONES ---
             const Toast = Swal.mixin({
                 toast: true,
                 position: 'top-end',
@@ -274,7 +296,7 @@
                 }
             });
 
-            // --- 4. SWEETALERT: MOSTRAR MENSAJES DE DJANGO ---
+            // --- 4. MENSAJES DJANGO ---
             {% if messages %}
                 {% for message in messages %}
                     var icono = 'info';
@@ -291,8 +313,7 @@
                 {% endfor %}
             {% endif %}
 
-            // --- 5. SWEETALERT: CONFIRMACIÓN DE BORRADO ---
-            // Aplica a cualquier enlace <a> con la clase .btn-eliminar
+            // --- 5. CONFIRMACIÓN BORRAR ---
             $(document).on('click', '.btn-eliminar', function(e) {
                 e.preventDefault();
                 var url = $(this).attr('href');

@@ -1,0 +1,285 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">Panel Financiero</h1>
+            <p class="text-muted small mb-0">
+                {% if anio_seleccionado %}
+                    Mostrando datos de: <strong>{{ anio_seleccionado }}</strong> {% if mes_seleccionado %}- Mes {{ mes_seleccionado }}{% endif %}
+                {% else %}
+                    Mostrando historial completo
+                {% endif %}
+            </p>
+        </div>
+        <a href="{% url 'importar_finanzas' %}" class="btn btn-success shadow-sm">
+            <i class="bi bi-file-earmark-spreadsheet me-2"></i>Importar Excel
+        </a>
+    </div>
+
+    <div class="card shadow-sm mb-4 border-0">
+        <div class="card-body py-2 bg-light rounded">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-auto">
+                    <span class="fw-bold text-secondary small"><i class="bi bi-funnel-fill me-1"></i>FILTRAR:</span>
+                </div>
+                
+                <div class="col-auto">
+                    <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos los años</option>
+                        {% for fecha in anios_disponibles %}
+                            <option value="{{ fecha.year }}" {% if anio_seleccionado == fecha.year %}selected{% endif %}>
+                                {{ fecha.year }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-auto">
+                    <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todos los meses</option>
+                        <option value="1" {% if mes_seleccionado == 1 %}selected{% endif %}>Enero</option>
+                        <option value="2" {% if mes_seleccionado == 2 %}selected{% endif %}>Febrero</option>
+                        <option value="3" {% if mes_seleccionado == 3 %}selected{% endif %}>Marzo</option>
+                        <option value="4" {% if mes_seleccionado == 4 %}selected{% endif %}>Abril</option>
+                        <option value="5" {% if mes_seleccionado == 5 %}selected{% endif %}>Mayo</option>
+                        <option value="6" {% if mes_seleccionado == 6 %}selected{% endif %}>Junio</option>
+                        <option value="7" {% if mes_seleccionado == 7 %}selected{% endif %}>Julio</option>
+                        <option value="8" {% if mes_seleccionado == 8 %}selected{% endif %}>Agosto</option>
+                        <option value="9" {% if mes_seleccionado == 9 %}selected{% endif %}>Septiembre</option>
+                        <option value="10" {% if mes_seleccionado == 10 %}selected{% endif %}>Octubre</option>
+                        <option value="11" {% if mes_seleccionado == 11 %}selected{% endif %}>Noviembre</option>
+                        <option value="12" {% if mes_seleccionado == 12 %}selected{% endif %}>Diciembre</option>
+                    </select>
+                </div>
+
+                {% if anio_seleccionado %}
+                <div class="col-auto">
+                    <a href="{% url 'finanzas_dashboard' %}" class="btn btn-outline-secondary btn-sm" title="Quitar filtros">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-4">
+            <div class="card border-left-success shadow h-100 py-2 border-0 border-start border-5 border-success">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Total Ingresos</div>
+                            <div class="h3 mb-0 font-weight-bold text-gray-800">${{ total_ingresos|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-graph-up-arrow fs-1 text-success opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card border-left-danger shadow h-100 py-2 border-0 border-start border-5 border-danger">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Total Egresos</div>
+                            <div class="h3 mb-0 font-weight-bold text-gray-800">${{ total_egresos|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-graph-down-arrow fs-1 text-danger opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2 border-0 border-start border-5 border-primary">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Balance Periodo</div>
+                            <div class="h3 mb-0 font-weight-bold text-gray-800">${{ balance|intcomma }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-wallet2 fs-1 text-primary opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        
+        <div class="col-xl-8 col-lg-7">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        {% if mes_seleccionado %}Evolución Diaria{% else %}Evolución Mensual{% endif %}
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-area" style="position: relative; height: 350px;">
+                        <canvas id="chartEvolucion"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-lg-5">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 bg-white">
+                    <h6 class="m-0 font-weight-bold text-primary">Ingresos vs Gastos</h6>
+                </div>
+                <div class="card-body">
+                    <div class="chart-pie pt-4 pb-2" style="position: relative; height: 250px;">
+                        <canvas id="chartBalance"></canvas>
+                    </div>
+                    <div class="mt-4 text-center small">
+                        <span class="mr-2">
+                            <i class="bi bi-circle-fill text-success"></i> Ingresos
+                        </span>
+                        <span class="mr-2">
+                            <i class="bi bi-circle-fill text-danger"></i> Egresos
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 bg-white">
+            <h6 class="m-0 font-weight-bold text-primary">Detalle de Movimientos</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Descripción / Detalle</th>
+                            <th class="text-end">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in movimientos %}
+                        <tr>
+                            <td>{{ m.fecha|date:"d/m/Y" }}</td>
+                            <td>
+                                {% if m.tipo == 'INGRESO' %}
+                                    <span class="badge bg-success bg-opacity-10 text-success px-3 py-2 rounded-pill">
+                                        <i class="bi bi-arrow-up-circle me-1"></i>Ingreso
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger px-3 py-2 rounded-pill">
+                                        <i class="bi bi-arrow-down-circle me-1"></i>Egreso
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ m.descripcion }}</div>
+                                {% if m.empresa %}
+                                    <small class="text-muted">{{ m.empresa.nombre }}</small>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold font-monospace">
+                                ${{ m.monto|intcomma }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                                No se encontraron datos para este filtro.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        Chart.defaults.font.family = 'Nunito, system-ui';
+        Chart.defaults.color = '#858796';
+
+        // GRÁFICO DONA
+        var ctxPie = document.getElementById("chartBalance");
+        if (ctxPie) {
+            new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: {{ pie_labels|safe }},
+                    datasets: [{
+                        data: {{ pie_data|safe }},
+                        backgroundColor: ['#1cc88a', '#e74a3b'],
+                        hoverBackgroundColor: ['#17a673', '#c0392b'],
+                        hoverBorderColor: "rgba(234, 236, 244, 1)",
+                    }],
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: { legend: { display: false } }
+                },
+            });
+        }
+
+        // GRÁFICO BARRAS (Dinámico)
+        var ctxBar = document.getElementById("chartEvolucion");
+        if (ctxBar) {
+            new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: {{ bar_labels|safe }},
+                    datasets: [
+                        {
+                            label: "Ingresos",
+                            backgroundColor: "#1cc88a",
+                            hoverBackgroundColor: "#17a673",
+                            data: {{ bar_ingresos|safe }},
+                            maxBarThickness: 25,
+                        },
+                        {
+                            label: "Egresos",
+                            backgroundColor: "#e74a3b",
+                            hoverBackgroundColor: "#c0392b",
+                            data: {{ bar_egresos|safe }},
+                            maxBarThickness: 25,
+                        }
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { 
+                            ticks: { 
+                                callback: function(val) { return '$' + val.toLocaleString('es-CL'); } 
+                            } 
+                        }
+                    },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -3,7 +3,8 @@ import calendar
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-
+from django.db import models
+from django.utils import timezone
 # --- TABLAS AUXILIARES (CATÁLOGOS) ---
 
 class Empresa(models.Model):
@@ -25,17 +26,24 @@ class Clasificacion(models.Model):
     def __str__(self):
         return self.nombre
 
+# --- NUEVO MODELO CARGO (Necesario para la importación RRHH) ---
+class Cargo(models.Model):
+    nombre = models.CharField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.nombre
+
 # --- TABLAS PRINCIPALES ---
 
 class Ingreso(models.Model):
     fecha = models.DateField()
     n_documento = models.CharField(max_length=50, blank=True, null=True)
     
-    # Monto Total
-    monto_transferencia = models.IntegerField(verbose_name="Monto Transferencia")
+    # CAMBIO: Usamos DecimalField para dinero
+    monto_transferencia = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Monto Transferencia")
     
-    # Campo para almacenar IVA en Ingresos
-    iva = models.IntegerField(default=0, verbose_name="Monto IVA")
+    # CAMBIO: Usamos DecimalField para IVA
+    iva = models.DecimalField(max_digits=12, decimal_places=0, default=0, verbose_name="Monto IVA")
     
     descripcion_movimiento = models.TextField(blank=True, null=True)
     estado = models.CharField(max_length=50) 
@@ -55,7 +63,10 @@ class Ingreso(models.Model):
 class Egreso(models.Model):
     fecha = models.DateField()
     n_documento = models.CharField(max_length=50, blank=True, null=True)
-    monto_transferencia = models.IntegerField(verbose_name="Monto Transferencia")
+    
+    # CAMBIO: DecimalField
+    monto_transferencia = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Monto Transferencia")
+    
     descripcion_movimiento = models.TextField(blank=True, null=True)
     estado = models.CharField(max_length=50)
     clasificacion = models.ForeignKey(Clasificacion, on_delete=models.PROTECT, null=True)
@@ -74,7 +85,10 @@ class CajaChica(models.Model):
     ]
 
     fecha = models.DateField()
-    monto = models.IntegerField(verbose_name="Monto Gasto")
+    
+    # CAMBIO: DecimalField
+    monto = models.DecimalField(max_digits=12, decimal_places=0, verbose_name="Monto Gasto")
+    
     responsable = models.CharField(max_length=100)
     descripcion = models.TextField(verbose_name="Descripción del Gasto") 
     numero_documento = models.CharField(max_length=50, blank=True, null=True)
@@ -88,7 +102,6 @@ class CajaChica(models.Model):
     def __str__(self):
         return f"{self.fecha} - ${self.monto} - {self.responsable}"
     
-    # --- AQUÍ ESTÁ LA CORRECCIÓN: Indentado dentro de la clase ---
     @property
     def iva_recuperable(self):
         # 1. Normalizar tipo
@@ -97,10 +110,10 @@ class CajaChica(models.Model):
         # 2. Calcular solo si es Boleta o Factura
         if tipo in ['BOLETA', 'FACTURA']:
             try:
-                # El monto es TOTAL, así que sacamos el neto dividiendo por 1.19
-                neto = self.monto / 1.19
-                iva = self.monto - neto
-                # CORRECCIÓN: Usamos round() para redondear al más cercano
+                # Convertimos a float para el cálculo matemático
+                monto_float = float(self.monto)
+                neto = monto_float / 1.19
+                iva = monto_float - neto
                 return int(round(iva))
             except:
                 return 0
@@ -110,16 +123,26 @@ class CajaChica(models.Model):
 class Trabajador(models.Model):
     empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE)
     nombre = models.CharField(max_length=200)
-    rut = models.CharField(max_length=20)
-    cargo = models.CharField(max_length=100)
+    rut = models.CharField(max_length=20, unique=True) # Rut único
+    
+    # CAMBIO: Cargo ahora es ForeignKey (Relación con tabla Cargo)
+    cargo = models.ForeignKey(Cargo, on_delete=models.PROTECT, null=True)
+    
+    # CAMBIO: Agregamos estado para filtrar activos/finiquitados fácilmente
+    estado = models.CharField(max_length=50, default='ACTIVO')
+
     fecha_contrato = models.DateField(null=True, blank=True)
     fecha_finiquito = models.DateField(null=True, blank=True)
-    monto_finiquito = models.IntegerField(default=0)
+    
+    # CAMBIO: DecimalField
+    monto_finiquito = models.DecimalField(max_digits=12, decimal_places=0, default=0)
+    
     fecha_carga = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        estado = "Finiquitado" if self.fecha_finiquito else "Activo"
-        return f"{self.nombre} ({self.cargo}) - {estado}"
+        # Ajustamos para evitar error si cargo es nulo
+        cargo_nombre = self.cargo.nombre if self.cargo else "Sin Cargo"
+        return f"{self.nombre} ({cargo_nombre}) - {self.estado}"
     
     @property
     def tiempo_servicio(self):
@@ -180,3 +203,78 @@ def guardar_perfil(sender, instance, **kwargs):
         instance.perfil.save()
     except Exception:
         Perfil.objects.create(user=instance)
+
+class Movimiento(models.Model):
+    TIPO_CHOICES = [
+        ('INGRESO', 'Ingreso'),
+        ('EGRESO', 'Egreso'),
+    ]
+
+    fecha = models.DateField(default=timezone.now)
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    
+    # Detalle o Glosa
+    descripcion = models.CharField(max_length=255, verbose_name="Descripción")
+    
+    # Dinero
+    monto = models.IntegerField()
+    
+    # Relaciones (Opcionales, usan SET_NULL para no borrar el dinero si borras la empresa)
+    empresa = models.ForeignKey('Empresa', on_delete=models.SET_NULL, null=True, blank=True)
+    centro_costo = models.ForeignKey('CentroCosto', on_delete=models.SET_NULL, null=True, blank=True)
+    
+    # Campos extra del Excel
+    banco = models.CharField(max_length=100, blank=True, null=True, verbose_name="Banco / Cuenta")
+    n_documento = models.CharField(max_length=100, blank=True, null=True, verbose_name="N° Documento")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Movimiento Financiero"
+        verbose_name_plural = "Movimientos Financieros"
+        ordering = ['-fecha'] # Ordenar del más nuevo al más viejo
+
+    def __str__(self):
+        return f"{self.fecha} | {self.descripcion} (${self.monto})"
+    
+# --- GESTIÓN DE INVENTARIO Y VENCIMIENTOS ---
+
+class Producto(models.Model):
+    codigo = models.CharField(max_length=50, unique=True, verbose_name="Código SKU")
+    nombre = models.CharField(max_length=200)
+    categoria = models.CharField(max_length=100, blank=True, null=True) # Ej: Helados, Postres
+    stock_minimo = models.IntegerField(default=10, verbose_name="Alerta Stock Bajo")
+    
+    def __str__(self):
+        return f"{self.codigo} - {self.nombre}"
+
+    @property
+    def stock_total(self):
+        # Suma automática de todos los lotes vigentes
+        return self.lote_set.aggregate(total=models.Sum('cantidad'))['total'] or 0
+
+class Lote(models.Model):
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    numero_lote = models.CharField(max_length=50)
+    fecha_elaboracion = models.DateField(blank=True, null=True)
+    fecha_vencimiento = models.DateField() # <--- ¡EL DATO CLAVE!
+    cantidad = models.IntegerField(default=0)
+    
+    class Meta:
+        ordering = ['fecha_vencimiento'] # Siempre muestra lo que vence primero
+
+    def __str__(self):
+        return f"{self.producto.nombre} - Lote {self.numero_lote}"
+
+    @property
+    def dias_para_vencer(self):
+        from datetime import date
+        delta = self.fecha_vencimiento - date.today()
+        return delta.days
+    
+    @property
+    def estado_vencimiento(self):
+        dias = self.dias_para_vencer
+        if dias < 0: return 'VENCIDO'
+        if dias <= 30: return 'POR_VENCER' # Alerta si vence en menos de 1 mes
+        return 'OK'

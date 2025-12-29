@@ -1,0 +1,47 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Ingresar Nuevo Lote</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Producto</label>
+                        {{ form.producto }}
+                        <div class="form-text">Si el producto no existe, debes crearlo primero en el Admin.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">N° Lote / Código Batch</label>
+                        {{ form.numero_lote }}
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Fecha Vencimiento</label>
+                            {{ form.fecha_vencimiento }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label fw-bold">Cantidad (Unidades)</label>
+                            {{ form.cantidad }}
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save me-2"></i>Guardar Lote
+                        </button>
+                        <a href="{% url 'inventario_dashboard' %}" class="btn btn-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

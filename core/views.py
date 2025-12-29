@@ -3,128 +3,251 @@ import io
 import json
 import os
 import pandas as pd
+import csv
 
-from django.db.models import Sum
-from django.db.models.functions import TruncMonth
-# Django Imports
+# --- IMPORTS DJANGO ---
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.models import Group
+from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Avg, Count, IntegerField, Q, Sum
 from django.db.models.functions import Cast, TruncDay, TruncMonth
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
-
-# WeasyPrint (PDF)
+from .forms import SalidaStockForm
+# --- IMPORTS TERCEROS ---
 try:
     from weasyprint import HTML
-except ImportError:
-    pass
+except (ImportError, OSError):
+    HTML = None
 
-# Tus Modelos y Formularios
+# --- IMPORTS LOCALES ---
+from .models import (
+    CajaChica, 
+    CentroCosto, 
+    Clasificacion, 
+    Empresa, 
+    Ingreso, 
+    Trabajador, 
+    Cargo, 
+    Movimiento,
+    Producto, # Nuevo
+    Lote      # Nuevo
+)
+
 from .forms import (
     CajaChicaForm,
     CargaExcelForm,
     IngresoForm,
     RegistroUsuarioForm,
     TrabajadorForm,
-)
-from .models import (
-    CajaChica,
-    CentroCosto,
-    Clasificacion,
-    Empresa,
-    Ingreso,
-    Trabajador,
+    LoteForm  # Nuevo
 )
 
-from django.http import JsonResponse
+from .services import DashboardService
 from .ia import entrenar_modelo, predecir_categoria
 
-# ---------------------------------------------------------
-# 1. DASHBOARD PRINCIPAL
-# ---------------------------------------------------------
+
+# =========================================================
+# 1. DASHBOARD GENERAL (Página de Inicio)
+# ========================================================
+
 @login_required
 def dashboard(request):
-    # Filtros de Fecha
-    anios_disponibles = Ingreso.objects.dates('fecha', 'year', order='DESC')
-    anio_filtro = request.GET.get('anio')
-    mes_filtro = request.GET.get('mes')
+    """VISTA PRINCIPAL: COMANDO CENTRAL"""
+    hoy = datetime.date.today()
+    fecha_limite = hoy + datetime.timedelta(days=30) # 30 días para alertas
 
-    ingresos = Ingreso.objects.all().order_by('fecha')
+    # --- 1. LOGÍSTICA (Alertas de Stock) ---
+    stock_vencido = Lote.objects.filter(fecha_vencimiento__lt=hoy).count()
+    stock_por_vencer = Lote.objects.filter(fecha_vencimiento__range=[hoy, fecha_limite]).count()
 
-    if anio_filtro:
-        ingresos = ingresos.filter(fecha__year=anio_filtro)
-    if mes_filtro:
-        ingresos = ingresos.filter(fecha__month=mes_filtro)
+    # --- 2. FINANZAS (Gastos del Mes Actual) ---
+    # Sumamos lo que cargaste en 'Ingresos/Gastos' correspondiente al mes actual
+    gastos_mes = Ingreso.objects.filter(
+        fecha__year=hoy.year,
+        fecha__month=hoy.month
+    ).aggregate(total=Sum('monto_transferencia'))['total'] or 0
 
-    # KPIs
-    total_monto = ingresos.aggregate(Sum('monto_transferencia'))['monto_transferencia__sum'] or 0
-    total_registros = ingresos.count()
-    promedio_monto = int(ingresos.aggregate(Avg('monto_transferencia'))['monto_transferencia__avg'] or 0)
+    # --- 3. RRHH (Personal Activo) ---
+    trabajadores_activos = Trabajador.objects.filter(fecha_finiquito__isnull=True).count()
     
-    # GRÁFICOS
-    # A. Por Empresa
-    gastos_empresa = ingresos.values('empresa__nombre').annotate(total=Sum('monto_transferencia')).order_by('-total')[:10]
-    labels_empresas = [g['empresa__nombre'] for g in gastos_empresa]
-    data_empresas = [int(g['total']) for g in gastos_empresa]
-
-    # B. Por Clasificación
-    gastos_clasificacion = ingresos.values('clasificacion__nombre').annotate(total=Sum('monto_transferencia')).order_by('-total')
-    labels_clasificacion = [g['clasificacion__nombre'] or "Sin Clasif." for g in gastos_clasificacion]
-    data_clasificacion = [int(g['total']) for g in gastos_clasificacion]   
-
-    # C. Evolución Temporal
-    labels_evolucion = []
-    data_evolucion = []
-
-    if mes_filtro:
-        gastos_evolucion = ingresos.annotate(periodo=TruncDay('fecha')).values('periodo').annotate(total=Sum('monto_transferencia')).order_by('periodo')
-        formato_fecha = "%d/%m"
-    else:
-        gastos_evolucion = ingresos.annotate(periodo=TruncMonth('fecha')).values('periodo').annotate(total=Sum('monto_transferencia')).order_by('periodo')
-        formato_fecha = "%b %Y"
-
-    for g in gastos_evolucion:
-        if g['periodo']:
-            labels_evolucion.append(g['periodo'].strftime(formato_fecha)) 
-            data_evolucion.append(int(g['total']))
+    # Calcular variación (ejemplo simple: RRHH)
+    # Podrías agregar más lógica aquí si quisieras comparar con el mes anterior
 
     context = {
-        'total_monto': total_monto,
-        'total_registros': total_registros,
-        'promedio_monto': promedio_monto,
-        'labels_empresas': json.dumps(labels_empresas),
-        'data_empresas': json.dumps(data_empresas),
-        'labels_clasificacion': json.dumps(labels_clasificacion),
-        'data_clasificacion': json.dumps(data_clasificacion),
-        'labels_evolucion': json.dumps(labels_evolucion),
-        'data_evolucion': json.dumps(data_evolucion),
-        'anios_disponibles': anios_disponibles,
-        'anio_seleccionado': int(anio_filtro) if anio_filtro else None,
-        'mes_seleccionado': int(mes_filtro) if mes_filtro else None,
+        'stock_vencido': stock_vencido,
+        'stock_por_vencer': stock_por_vencer,
+        'gastos_mes': gastos_mes,
+        'trabajadores_activos': trabajadores_activos,
+        'hoy': hoy,
     }
-
     return render(request, 'core/dashboard.html', context)
 
 
-# ---------------------------------------------------------
-# 2. GESTIÓN DE INGRESOS (GASTOS)
-# ---------------------------------------------------------
+# =========================================================
+# 2. MÓDULO FINANZAS (Control de Movimientos .xlsm)
+# =========================================================
+@login_required
+def finanzas_dashboard(request):
+    """Dashboard Financiero con Filtros de Fecha."""
+    
+    # 1. Capturar Filtros
+    anio = request.GET.get('anio')
+    mes = request.GET.get('mes')
+
+    # Queryset base (todos los movimientos)
+    queryset = Movimiento.objects.all()
+
+    # Aplicar filtros si existen
+    if anio:
+        queryset = queryset.filter(fecha__year=anio)
+    
+    if anio and mes: 
+        queryset = queryset.filter(fecha__month=mes)
+
+    # 2. Calcular KPIs
+    total_ingresos = queryset.filter(tipo='INGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    total_egresos = queryset.filter(tipo='EGRESO').aggregate(Sum('monto'))['monto__sum'] or 0
+    balance = total_ingresos - total_egresos
+
+    # 3. Datos para Gráfico de Evolución
+    if anio and mes:
+        # Agrupar por DÍA
+        evolucion = queryset.annotate(fecha_trunc=TruncDay('fecha'))\
+                            .values('fecha_trunc')\
+                            .annotate(
+                                ingreso=Sum('monto', filter=Q(tipo='INGRESO')),
+                                egreso=Sum('monto', filter=Q(tipo='EGRESO'))
+                            ).order_by('fecha_trunc')
+        formato_fecha = "%d %b"
+    else:
+        # Agrupar por MES
+        evolucion = queryset.annotate(fecha_trunc=TruncMonth('fecha'))\
+                            .values('fecha_trunc')\
+                            .annotate(
+                                ingreso=Sum('monto', filter=Q(tipo='INGRESO')),
+                                egreso=Sum('monto', filter=Q(tipo='EGRESO'))
+                            ).order_by('fecha_trunc')
+        formato_fecha = "%B %Y"
+
+    labels_evolucion = []
+    data_ingresos = []
+    data_egresos = []
+
+    for e in evolucion:
+        if e['fecha_trunc']:
+            labels_evolucion.append(e['fecha_trunc'].strftime(formato_fecha))
+            data_ingresos.append(e['ingreso'] or 0)
+            data_egresos.append(e['egreso'] or 0)
+
+    # 4. Obtener Años Disponibles
+    anios_disponibles = Movimiento.objects.dates('fecha', 'year', order='DESC')
+
+    context = {
+        'total_ingresos': total_ingresos,
+        'total_egresos': total_egresos,
+        'balance': balance,
+        'movimientos': queryset.order_by('-fecha')[:50],
+        'pie_labels': ['Ingresos', 'Egresos'],
+        'pie_data': [total_ingresos, total_egresos],
+        'bar_labels': labels_evolucion,
+        'bar_ingresos': data_ingresos,
+        'bar_egresos': data_egresos,
+        'anios_disponibles': anios_disponibles,
+        'anio_seleccionado': int(anio) if anio else None,
+        'mes_seleccionado': int(mes) if mes else None,
+    }
+    return render(request, 'core/finanzas/dashboard.html', context)
+
+@login_required
+def importar_finanzas(request):
+    """Importador Específico para Hoja 'Control de Finanzas'"""
+    if request.method == 'POST' and request.FILES.get('archivo_excel'):
+        archivo = request.FILES['archivo_excel']
+        try:
+            df = pd.read_excel(
+                archivo, 
+                engine='openpyxl', 
+                sheet_name='Control de Finanzas',
+                header=12,
+                usecols="B:F"
+            )
+            
+            nuevos_nombres = ['FECHA', 'DESCRIPCION', 'TIPO', 'CATEGORIA', 'MONTO']
+            if len(df.columns) == 5:
+                df.columns = nuevos_nombres
+            
+            creados = 0
+            
+            with transaction.atomic():
+                for index, row in df.iterrows():
+                    fecha = row.get('FECHA')
+                    if pd.isnull(fecha) or str(fecha).strip() == '': continue
+
+                    desc = str(row.get('DESCRIPCION', '')).strip()
+                    if desc == 'nan': desc = 'Sin detalle'
+
+                    categoria = str(row.get('CATEGORIA', '')).strip()
+                    if categoria and categoria != 'nan':
+                        desc = f"{categoria} - {desc}"
+
+                    try:
+                        val_monto = row.get('MONTO', 0)
+                        if isinstance(val_monto, str):
+                             val_monto = val_monto.replace('$', '').replace('.', '').replace(',', '')
+                        monto = abs(int(float(val_monto)))
+                    except:
+                        monto = 0
+                        
+                    if monto == 0: continue
+
+                    tipo_texto = str(row.get('TIPO', '')).upper()
+                    tipo_final = 'EGRESO' 
+                    if 'INGRESO' in tipo_texto or 'ABONO' in tipo_texto:
+                        tipo_final = 'INGRESO'
+                    
+                    Movimiento.objects.create(
+                        fecha=fecha,
+                        descripcion=desc,
+                        monto=monto,
+                        tipo=tipo_final,
+                    )
+                    creados += 1
+
+            if creados > 0:
+                messages.success(request, f'¡Excelente! Se cargaron {creados} registros.')
+            else:
+                messages.warning(request, 'Se leyó la hoja, pero no se encontraron filas válidas.')
+                
+            return redirect('finanzas_dashboard')
+
+        except Exception as e:
+            if "Worksheet" in str(e) and "does not exist" in str(e):
+                messages.error(request, 'Error: No se encontró la hoja llamada "Control de Finanzas".')
+            else:
+                messages.error(request, f"Error técnico: {str(e)}")
+            print(f"Error Finanzas: {e}")
+
+    return render(request, 'core/finanzas/importar.html')
+
+
+# =========================================================
+# 3. MÓDULO INGRESOS / GASTOS (CRUD Clásico)
+# =========================================================
 @login_required
 def lista_ingresos(request):
-    # A. Carga de Catálogos
     empresas = Empresa.objects.all().order_by('nombre')
     centros = CentroCosto.objects.all().order_by('nombre')
     clasificaciones = Clasificacion.objects.all().order_by('nombre')
     
-    # B. Captura de Filtros
     f_empresa = request.GET.get('empresa')
     f_centro = request.GET.get('centro')
     f_clasif = request.GET.get('clasificacion')
@@ -138,57 +261,34 @@ def lista_ingresos(request):
     pagina = request.GET.get('page', 1)
     por_pagina = request.GET.get('per_page', 25) 
 
-    # C. Consulta Base
     ingresos = Ingreso.objects.select_related('empresa', 'centro_costo', 'clasificacion').annotate(
         monto_real=Cast('monto_transferencia', output_field=IntegerField())
     )
 
-    # D. Aplicación de Filtros
-    if f_empresa:
-        ingresos = ingresos.filter(empresa_id=f_empresa)
-    if f_centro:
-        ingresos = ingresos.filter(centro_costo_id=f_centro)
-    if f_clasif:
-        ingresos = ingresos.filter(clasificacion_id=f_clasif)
-    
+    if f_empresa: ingresos = ingresos.filter(empresa_id=f_empresa)
+    if f_centro: ingresos = ingresos.filter(centro_costo_id=f_centro)
+    if f_clasif: ingresos = ingresos.filter(clasificacion_id=f_clasif)
     if f_min:
-        try:
-            val_min = int(f_min.replace('.', '').replace(',', ''))
-            ingresos = ingresos.filter(monto_real__gte=val_min)
+        try: ingresos = ingresos.filter(monto_real__gte=int(f_min.replace('.', '')))
         except ValueError: pass
-            
     if f_max:
-        try:
-            val_max = int(f_max.replace('.', '').replace(',', ''))
-            ingresos = ingresos.filter(monto_real__lte=val_max)
+        try: ingresos = ingresos.filter(monto_real__lte=int(f_max.replace('.', '')))
         except ValueError: pass
+    if f_fecha_inicio: ingresos = ingresos.filter(fecha__gte=f_fecha_inicio)
+    if f_fecha_fin: ingresos = ingresos.filter(fecha__lte=f_fecha_fin)
 
-    if f_fecha_inicio:
-        ingresos = ingresos.filter(fecha__gte=f_fecha_inicio)
-    if f_fecha_fin:
-        ingresos = ingresos.filter(fecha__lte=f_fecha_fin)
+    if f_orden == 'monto_desc': ingresos = ingresos.order_by('-monto_real')
+    elif f_orden == 'monto_asc': ingresos = ingresos.order_by('monto_real')
+    elif f_orden == 'fecha_asc': ingresos = ingresos.order_by('fecha')
+    else: ingresos = ingresos.order_by('-fecha')
 
-    # --- LÓGICA DE ORDENAMIENTO ---
-    if f_orden == 'monto_desc':
-        ingresos = ingresos.order_by('-monto_real')
-    elif f_orden == 'monto_asc':
-        ingresos = ingresos.order_by('monto_real')
-    elif f_orden == 'fecha_asc':
-        ingresos = ingresos.order_by('fecha')
-    else:
-        ingresos = ingresos.order_by('-fecha')
-
-    # E. Lógica del Gráfico
     datos_grafico = ingresos.annotate(dia=TruncDay('fecha')).values('dia').annotate(total=Sum('monto_real')).order_by('dia')
-    
     labels_grafico = [d['dia'].strftime("%d/%m/%Y") for d in datos_grafico if d['dia']]
     data_grafico = [d['total'] for d in datos_grafico if d['dia']]
 
-    # F. Paginación
     paginator = Paginator(ingresos, por_pagina)
     page_obj = paginator.get_page(pagina)
 
-    # G. Respuesta AJAX
     if es_ajax:
         contexto_ajax = {
             'ingresos': page_obj,
@@ -206,7 +306,6 @@ def lista_ingresos(request):
             'grafico_data': data_grafico
         })
 
-    # H. Respuesta Normal (Render)
     context = {
         'ingresos': page_obj,
         'empresas': empresas,
@@ -259,76 +358,108 @@ def eliminar_ingreso(request, id):
     ingreso.delete()
     messages.success(request, 'Registro eliminado correctamente.')
     return redirect('lista_ingresos')
-
 @login_required
 def importar_excel(request):
+    """Importador con AUTO-CREACIÓN de Categorías y Centros de Costo"""
     if request.method == 'POST':
         form = CargaExcelForm(request.POST, request.FILES)
         if form.is_valid():
             archivo = request.FILES['archivo_excel']
+            creados = 0
+            nuevos_datos = 0 # Contador para saber cuántas categorías nuevas creamos
+            
             try:
-                # 1. Leer Excel
-                df = pd.read_excel(archivo, sheet_name='REGISTRO EGRESOS', header=5)
-                
-                # 2. Iterar filas
-                for index, row in df.iterrows():
-                    # --- A. Datos Básicos y Limpieza ---
-                    tipo_doc = str(row.get('Tipo', '')).strip().upper()
-                    
-                    monto_total = row.get('Monto Transferencia', 0)
-                    if pd.isna(monto_total): monto_total = 0
-                    
-                    iva = row.get('IVA', 0)
-                    if pd.isna(iva): iva = 0
+                # 1. Leer Excel (Fila 6 como encabezado)
+                try:
+                    df = pd.read_excel(archivo, sheet_name='REGISTRO EGRESOS', header=5)
+                except:
+                    df = pd.read_excel(archivo, header=5)
 
-                    # --- B. Lógica BOLETA (Cálculo IVA Automático) ---
-                    if tipo_doc == 'BOLETA' and iva == 0 and monto_total > 0:
-                        neto_calculado = monto_total / 1.19
-                        iva = int(round(monto_total - neto_calculado))
-                    
-                    # --- C. Búsqueda de Relaciones (FKs) ---
-                    nombre_empresa = row.get('Empresa')
-                    empresa_obj = None
-                    if nombre_empresa and not pd.isna(nombre_empresa):
-                        empresa_obj = Empresa.objects.filter(nombre__iexact=str(nombre_empresa).strip()).first()
+                df.columns = df.columns.str.strip()
 
-                    nombre_centro = row.get('Centro de Costo')
-                    centro_obj = None
-                    if nombre_centro and not pd.isna(nombre_centro):
-                        centro_obj = CentroCosto.objects.filter(nombre__iexact=str(nombre_centro).strip()).first()
+                if 'Fecha' not in df.columns or 'Monto Transferencia' not in df.columns:
+                    messages.error(request, 'Error: No se encontraron columnas "Fecha" o "Monto Transferencia" en la fila 6.')
+                    return redirect('importar_excel')
+
+                with transaction.atomic():
+                    for index, row in df.iterrows():
+                        # Validar Fecha y Monto
+                        fecha = row.get('Fecha')
+                        if pd.isnull(fecha): continue
                         
-                    nombre_clasif = row.get('Clasificación')
-                    clasif_obj = None
-                    if nombre_clasif and not pd.isna(nombre_clasif):
-                        clasif_obj = Clasificacion.objects.filter(nombre__iexact=str(nombre_clasif).strip()).first()
+                        monto = row.get('Monto Transferencia', 0)
+                        if pd.isnull(monto) or monto == 0: continue
 
-                    # --- D. Guardar Registro ---
-                    fecha_row = row.get('Fecha')
-                    if not pd.isna(fecha_row) and monto_total > 0:
+                        # --- AQUÍ ESTÁ EL CAMBIO MÁGICO: get_or_create ---
+                        
+                        # 1. Empresa (Si no existe, la crea)
+                        nombre_empresa = str(row.get('Empresa', '')).strip()
+                        empresa_obj = None
+                        if nombre_empresa and nombre_empresa.lower() != 'nan':
+                            empresa_obj, created = Empresa.objects.get_or_create(
+                                nombre__iexact=nombre_empresa, 
+                                defaults={'nombre': nombre_empresa}
+                            )
+
+                        # 2. Centro de Costo (Si no existe, lo crea)
+                        nombre_centro = str(row.get('Centro de Costo', '')).strip()
+                        centro_obj = None
+                        if nombre_centro and nombre_centro.lower() != 'nan':
+                            centro_obj, _ = CentroCosto.objects.get_or_create(
+                                nombre__iexact=nombre_centro,
+                                defaults={'nombre': nombre_centro}
+                            )
+
+                        # 3. Clasificación (Si no existe, la crea)
+                        nombre_clasif = str(row.get('Clasificación', '')).strip()
+                        clasif_obj = None
+                        if nombre_clasif and nombre_clasif.lower() != 'nan':
+                            clasif_obj, _ = Clasificacion.objects.get_or_create(
+                                nombre__iexact=nombre_clasif,
+                                defaults={'nombre': nombre_clasif}
+                            )
+
+                        # Datos de Texto
+                        desc_movimiento = str(row.get('Descripcion de Movimiento', 'Sin descripción')).strip()
+                        if desc_movimiento.lower() == 'nan': desc_movimiento = 'Sin descripción'
+
+                        detalle_txt = str(row.get('Detalle', '')).strip()
+                        if detalle_txt.lower() == 'nan': detalle_txt = ''
+                        
+                        n_doc = row.get('N° DOCUMENTO')
+                        if not pd.isnull(n_doc):
+                            detalle_txt = f"Doc: {n_doc} - {detalle_txt}"
+
+                        tipo_doc = str(row.get('Tipo', 'GASTO')).strip()
+                        
+                        # Guardar
                         Ingreso.objects.create(
-                            fecha=fecha_row,
-                            empresa=empresa_obj,
-                            centro_costo=centro_obj,
-                            clasificacion=clasif_obj,
+                            fecha=fecha,
+                            monto_transferencia=monto,
+                            descripcion_movimiento=desc_movimiento,
                             tipo_documento=tipo_doc,
-                            monto_transferencia=monto_total,
-                            iva=iva,
-                            detalle=row.get('Detalle', ''),
-                            descripcion=row.get('Descripcion de Movimiento', '')
+                            detalle=detalle_txt,
+                            empresa=empresa_obj,       # Ahora sí llevará dato
+                            centro_costo=centro_obj,   # Ahora sí llevará dato
+                            clasificacion=clasif_obj,  # Ahora sí llevará dato
+                            iva=0
                         )
+                        creados += 1
 
-                messages.success(request, 'Archivo importado correctamente. Se calculó IVA para Boletas.')
-                return redirect('importar_excel')
+                messages.success(request, f'¡Listo! Se cargaron {creados} registros y se crearon las categorías faltantes automáticamente.')
 
             except Exception as e:
-                messages.error(request, f"Error al procesar: {e}")
+                messages.error(request, f"Error técnico: {str(e)}")
+                print(f"Error completo: {e}")
+                
+            return redirect('importar_excel')
     else:
         form = CargaExcelForm()
+        
     return render(request, 'core/importar.html', {'form': form})
 
 @login_required
 def descargar_plantilla(request):
-    # Crear DataFrame vacío de ejemplo
     ejemplo = {
         'Fecha': ['01/12/2025'],
         'Empresa': ['Nombre Empresa'],
@@ -352,14 +483,13 @@ def descargar_plantilla(request):
     return response
 
 
-# ---------------------------------------------------------
-# 3. CAJA CHICA
-# ---------------------------------------------------------
+# =========================================================
+# 4. MÓDULO CAJA CHICA
+# =========================================================
 @login_required
 def lista_caja_chica(request):
     gastos = CajaChica.objects.all().order_by('-fecha')
 
-    # --- LÓGICA DEL GRÁFICO ---
     resumen_meses = CajaChica.objects.annotate(mes=TruncMonth('fecha'))\
                                      .values('mes')\
                                      .annotate(total=Sum('monto'))\
@@ -367,7 +497,6 @@ def lista_caja_chica(request):
 
     labels = []
     data = []
-    
     for registro in resumen_meses:
         if registro['mes']:
             labels.append(registro['mes'].strftime('%B %Y')) 
@@ -416,7 +545,6 @@ def caja_chica_eliminar(request, id):
 
 @login_required
 def exportar_caja_chica_pdf(request):
-    # Versión WeasyPrint (Moderna)
     gastos = CajaChica.objects.all().order_by('-fecha')
     total_gasto = gastos.aggregate(Sum('monto'))['monto__sum'] or 0
     
@@ -432,16 +560,18 @@ def exportar_caja_chica_pdf(request):
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = 'inline; filename="rendicion_caja_chica.pdf"'
     
-    HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(response)
+    if HTML:
+        HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(response)
+    else:
+        return HttpResponse("Error: La librería de PDF no está configurada (Falta GTK).")
     return response
 
 
-# ---------------------------------------------------------
-# 4. RECURSOS HUMANOS (RRHH)
-# ---------------------------------------------------------
+# =========================================================
+# 5. MÓDULO RRHH (Trabajadores y Finiquitos)
+# =========================================================
 @login_required
 def dashboard_rrhh(request):
-    # 1. Filtro de Empresa
     filtro_empresa = request.GET.get('empresa', '')
     workers_queryset = Trabajador.objects.all()
 
@@ -453,31 +583,13 @@ def dashboard_rrhh(request):
         workers_queryset = workers_queryset.filter(empresa__nombre__icontains='Maquehue')
         nombre_empresa_seleccionada = "Maquehue SPA"
 
-    # 2. CÁLCULOS PARA TABLA RESUMEN (Globales)
-    samka_activos = Trabajador.objects.filter(
-        empresa__nombre__icontains='Samka', 
-        fecha_finiquito__isnull=True
-    ).count()
-    
-    samka_finiquitados = Trabajador.objects.filter(
-        empresa__nombre__icontains='Samka', 
-        fecha_finiquito__isnull=False
-    ).count()
-
-    maquehue_activos = Trabajador.objects.filter(
-        empresa__nombre__icontains='Maquehue', 
-        fecha_finiquito__isnull=True
-    ).count()
-    
-    maquehue_finiquitados = Trabajador.objects.filter(
-        empresa__nombre__icontains='Maquehue', 
-        fecha_finiquito__isnull=False
-    ).count()
-
+    samka_activos = Trabajador.objects.filter(empresa__nombre__icontains='Samka', fecha_finiquito__isnull=True).count()
+    samka_finiquitados = Trabajador.objects.filter(empresa__nombre__icontains='Samka', fecha_finiquito__isnull=False).count()
+    maquehue_activos = Trabajador.objects.filter(empresa__nombre__icontains='Maquehue', fecha_finiquito__isnull=True).count()
+    maquehue_finiquitados = Trabajador.objects.filter(empresa__nombre__icontains='Maquehue', fecha_finiquito__isnull=False).count()
     total_activos = samka_activos + maquehue_activos
     total_finiquitados = samka_finiquitados + maquehue_finiquitados
 
-    # 3. CÁLCULOS EXISTENTES
     activos_resumen = workers_queryset.values('empresa__nombre', 'cargo').annotate(
         total=Count('id'),
         activos=Count('id', filter=Q(fecha_finiquito__isnull=True)),
@@ -495,7 +607,6 @@ def dashboard_rrhh(request):
 
     lista_trabajadores = workers_queryset.order_by('empresa', 'nombre')
 
-    # 4. RESPUESTA AJAX
     if request.GET.get('modo_ajax') == 'true':
         html_tabla = render_to_string(
             'core/partials/tabla_trabajadores.html', 
@@ -509,7 +620,6 @@ def dashboard_rrhh(request):
             'titulo_pagina': nombre_empresa_seleccionada
         })
 
-    # 5. RESPUESTA NORMAL
     context = {
         'lista_trabajadores': lista_trabajadores,
         'activos_resumen': activos_resumen,
@@ -523,21 +633,132 @@ def dashboard_rrhh(request):
         'total_activos': total_activos,
         'total_finiquitados': total_finiquitados,
     }
-
     return render(request, 'core/dashboard_rrhh.html', context)
 
 @login_required
 def importar_rrhh(request):
+    """Importador Avanzado RRHH"""
     if request.method == 'POST' and request.FILES.get('archivo_excel'):
         archivo = request.FILES['archivo_excel']
         try:
-            # Aquí deberías poner tu lógica de importación RRHH real si la tienes,
-            # por ahora mantengo el mensaje de éxito genérico para no romper nada.
-            xls = pd.ExcelFile(archivo)
-            messages.success(request, 'Procesado correctamente.')
+            xls = pd.ExcelFile(archivo, engine='openpyxl')
+            hojas = xls.sheet_names
+            texto_hojas = "".join(str(h).upper() for h in hojas)
+            
+            empresa_archivo = None
+            if "SAMKA" in texto_hojas and "MAQUEHUE" not in texto_hojas:
+                empresa_archivo, _ = Empresa.objects.get_or_create(nombre="Samka SPA")
+            elif "MAQUEHUE" in texto_hojas and "SAMKA" not in texto_hojas:
+                empresa_archivo, _ = Empresa.objects.get_or_create(nombre="Maquehue SPA")
+            
+            trabajadores_batch = {} 
+            
+            for nombre_hoja in hojas:
+                nombre_upper = str(nombre_hoja).upper()
+                empresa_hoja = None
+                if "SAMKA" in nombre_upper:
+                    empresa_hoja, _ = Empresa.objects.get_or_create(nombre="Samka SPA")
+                elif "MAQUEHUE" in nombre_upper:
+                    empresa_hoja, _ = Empresa.objects.get_or_create(nombre="Maquehue SPA")
+                
+                if not empresa_hoja and ("FINIQUITADO" in nombre_upper or "PERSONAL" in nombre_upper):
+                    empresa_hoja = empresa_archivo
+                
+                if not empresa_hoja: continue 
+
+                df = pd.read_excel(archivo, sheet_name=nombre_hoja)
+                df.columns = df.columns.str.strip().str.upper()
+
+                if 'RUT' not in df.columns or 'NOMBRE' not in df.columns: continue
+
+                es_hoja_finiquito = "FINIQUITADO" in nombre_upper or "PERSONAL" in nombre_upper
+
+                for index, row in df.iterrows():
+                    rut = str(row.get('RUT', '')).strip().upper()
+                    if not rut or len(rut) < 3 or rut == 'NAN': continue
+
+                    nombre = str(row.get('NOMBRE', '')).strip()
+                    cargo_txt = str(row.get('CARGO', 'Operario')).strip()
+                    if cargo_txt.upper() == 'NAN': cargo_txt = 'Operario'
+                    
+                    fecha_inicio = row.get('CONTRATO')
+                    if pd.isnull(fecha_inicio): fecha_inicio = None
+                    
+                    fecha_fin = row.get('FINIQUITO')
+                    if pd.isnull(fecha_fin) or isinstance(fecha_fin, (int, float)):
+                         fecha_fin = None
+                    
+                    monto = 0
+                    if 'FINIQUITO.1' in df.columns:
+                        val_monto = row.get('FINIQUITO.1', 0)
+                        if isinstance(val_monto, (int, float)) and not pd.isna(val_monto):
+                            monto = val_monto
+                    
+                    estado_nuevo = 'ACTIVO'
+                    if fecha_fin or es_hoja_finiquito:
+                        estado_nuevo = 'FINIQUITADO'
+
+                    if rut in trabajadores_batch:
+                        previo = trabajadores_batch[rut]
+                        if previo['estado'] == 'FINIQUITADO':
+                            if not previo['fecha_contrato'] and fecha_inicio:
+                                previo['fecha_contrato'] = fecha_inicio
+                            if not previo['monto_finiquito'] and monto > 0:
+                                previo['monto_finiquito'] = monto
+                            if not previo['fecha_finiquito'] and fecha_fin:
+                                previo['fecha_finiquito'] = fecha_fin
+                            continue
+                    
+                    trabajadores_batch[rut] = {
+                        'nombre': nombre,
+                        'cargo_txt': cargo_txt,
+                        'empresa': empresa_hoja,
+                        'fecha_contrato': fecha_inicio,
+                        'fecha_finiquito': fecha_fin,
+                        'monto_finiquito': monto,
+                        'estado': estado_nuevo
+                    }
+
+            creados = 0
+            actualizados = 0
+            
+            with transaction.atomic():
+                for rut, data in trabajadores_batch.items():
+                    cargo_obj, _ = Cargo.objects.get_or_create(
+                        nombre__iexact=data['cargo_txt'],
+                        defaults={'nombre': data['cargo_txt']}
+                    )
+                    
+                    defaults = {
+                        'nombre': data['nombre'],
+                        'cargo': cargo_obj,
+                        'empresa': data['empresa'],
+                        'fecha_contrato': data['fecha_contrato'],
+                        'estado': data['estado']
+                    }
+                    
+                    if data['fecha_finiquito']:
+                        defaults['fecha_finiquito'] = data['fecha_finiquito']
+                    elif data['estado'] == 'ACTIVO':
+                        defaults['fecha_finiquito'] = None
+                        
+                    if data['monto_finiquito'] > 0:
+                        defaults['monto_finiquito'] = data['monto_finiquito']
+
+                    obj, created = Trabajador.objects.update_or_create(
+                        rut=rut,
+                        defaults=defaults
+                    )
+                    if created: creados += 1
+                    else: actualizados += 1
+
+            messages.success(request, f'Procesado correctamente: {creados} nuevos, {actualizados} actualizados.')
             return redirect('dashboard_rrhh')
+
         except Exception as e:
-            messages.error(request, f"Error: {e}")
+            print(f"ERROR IMPT: {e}")
+            messages.error(request, f"Error al importar: {str(e)}")
+
     return render(request, 'core/importar_rrhh.html')
 
 @login_required
@@ -563,15 +784,56 @@ def editar_trabajador(request, id):
             return redirect('dashboard_rrhh')
     else:
         form = TrabajadorForm(instance=trabajador)
-    return render(request, 'core/nuevo_trabajador.html', {
-        'form': form, 
-        'titulo': 'Editar Trabajador'
-    })
+    return render(request, 'core/nuevo_trabajador.html', {'form': form, 'titulo': 'Editar Trabajador'})
 
 
-# ---------------------------------------------------------
-# 5. USUARIOS Y PERFIL
-# ---------------------------------------------------------
+# =========================================================
+# 6. MÓDULO LOGÍSTICA / INVENTARIO
+# =========================================================
+@login_required
+def inventario_dashboard(request):
+    """Panel de Control de Stock y Vencimientos"""
+    hoy = datetime.date.today()
+    fecha_limite = hoy + datetime.timedelta(days=30) 
+
+    # 1. LOTES EN PELIGRO
+    lotes_vencidos = Lote.objects.filter(fecha_vencimiento__lt=hoy)
+    lotes_por_vencer = Lote.objects.filter(fecha_vencimiento__range=[hoy, fecha_limite])
+
+    # 2. INVENTARIO COMPLETO
+    productos = Producto.objects.all()
+
+    alerta_roja = lotes_vencidos.count()
+    alerta_amarilla = lotes_por_vencer.count()
+
+    context = {
+        'lotes_vencidos': lotes_vencidos,
+        'lotes_por_vencer': lotes_por_vencer,
+        'productos': productos,
+        'alerta_roja': alerta_roja,
+        'alerta_amarilla': alerta_amarilla,
+        'hoy': hoy,
+    }
+    return render(request, 'core/inventario/dashboard.html', context)
+
+@login_required
+def ingresar_lote(request):
+    """Formulario para ingresar stock nuevo"""
+    if request.method == 'POST':
+        form = LoteForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Lote ingresado correctamente.')
+            return redirect('inventario_dashboard')
+    else:
+        form = LoteForm()
+    
+    return render(request, 'core/inventario/form_lote.html', {'form': form})
+
+
+# =========================================================
+# 7. MÓDULO USUARIOS Y LOGIN
+# =========================================================
 @login_required
 def registro_usuario(request):
     if not request.user.is_superuser:
@@ -605,19 +867,191 @@ def perfil_usuario(request):
         form = PasswordChangeForm(request.user)
     return render(request, 'core/perfil.html', {'form': form})
 
+class CustomLoginView(LoginView):
+    """Login para usuarios normales (Azul)"""
+    template_name = 'core/login.html'
+    redirect_authenticated_user = True 
+
+    def form_valid(self, form):
+        recuerdame = self.request.POST.get('recuerdame')
+        if recuerdame:
+            self.request.session.set_expiry(1209600)
+        else:
+            self.request.session.set_expiry(0)
+        return super().form_valid(form)
+
+# core/views.py (Al final del archivo)
+
+class AdminLoginView(CustomLoginView):
+    """Login para administradores (Oscuro)"""
+    template_name = 'core/login_admin.html'
+    
+    # AGREGA ESTA LÍNEA PARA ROMPER EL BUCLE:
+    redirect_authenticated_user = False
+
+
+# =========================================================
+# 8. MÓDULO INTELIGENCIA ARTIFICIAL
+# =========================================================
 @login_required
 def api_entrenar_ia(request):
-    """Botón para forzar el re-entrenamiento"""
     exito, mensaje = entrenar_modelo()
     return JsonResponse({'status': 'ok' if exito else 'error', 'mensaje': mensaje})
 
 @login_required
 def api_predecir_categoria(request):
-    """AJAX: Recibe texto, devuelve categoría sugerida"""
     texto = request.GET.get('texto', '')
     sugerencia = predecir_categoria(texto)
-    
-    if sugerencia:
-        return JsonResponse({'categoria': sugerencia})
+    return JsonResponse({'categoria': sugerencia if sugerencia else None})
+
+@login_required
+def salida_stock(request):
+    """Descuenta stock usando lógica FIFO (Lo primero que vence es lo primero que sale)"""
+    if request.method == 'POST':
+        form = SalidaStockForm(request.POST)
+        if form.is_valid():
+            producto = form.cleaned_data['producto']
+            cantidad_solicitada = form.cleaned_data['cantidad']
+
+            # 1. Verificar Stock Total
+            stock_actual = producto.lote_set.aggregate(total=Sum('cantidad'))['total'] or 0
+            
+            if cantidad_solicitada > stock_actual:
+                messages.error(request, f'Error: No hay suficiente stock. Tienes {stock_actual}, pides {cantidad_solicitada}.')
+            else:
+                # 2. Lógica FIFO (First In, First Out)
+                # Traemos los lotes ordenados por vencimiento (el más viejo primero)
+                lotes = Lote.objects.filter(producto=producto).order_by('fecha_vencimiento')
+                
+                cantidad_pendiente = cantidad_solicitada
+                
+                with transaction.atomic():
+                    for lote in lotes:
+                        if cantidad_pendiente <= 0:
+                            break
+                        
+                        if lote.cantidad <= cantidad_pendiente:
+                            # Este lote se agota completo
+                            cantidad_pendiente -= lote.cantidad
+                            lote.delete() # Lo borramos para que no genere alertas de vencimiento vacías
+                        else:
+                            # Este lote tiene suficiente para cubrir lo que falta
+                            lote.cantidad -= cantidad_pendiente
+                            lote.save()
+                            cantidad_pendiente = 0
+                
+                messages.success(request, f'Se despacharon {cantidad_solicitada} unidades de {producto.nombre} correctamente.')
+                return redirect('inventario_dashboard')
     else:
-        return JsonResponse({'categoria': None})
+        form = SalidaStockForm()
+
+    return render(request, 'core/inventario/form_salida.html', {'form': form})
+
+@login_required
+def enviar_alerta_vencimientos(request):
+    """Revisa lotes por vencer y envía un correo al usuario actual."""
+    hoy = datetime.date.today()
+    fecha_limite = hoy + datetime.timedelta(days=30) 
+
+    # Buscamos lo crítico
+    lotes_vencidos = Lote.objects.filter(fecha_vencimiento__lt=hoy)
+    lotes_por_vencer = Lote.objects.filter(fecha_vencimiento__range=[hoy, fecha_limite])
+
+    # Si no hay nada urgente, no molestamos
+    if not lotes_vencidos.exists() and not lotes_por_vencer.exists():
+        messages.info(request, 'No hay productos en riesgo para reportar.')
+        return redirect('inventario_dashboard')
+
+    try:
+        # Preparamos el mensaje (Asunto y Cuerpo)
+        asunto = f"⚠️ ALERTA DE STOCK - {hoy.strftime('%d/%m/%Y')}"
+        
+        mensaje_html = render_to_string('core/emails/alerta_stock.html', {
+            'lotes_vencidos': lotes_vencidos,
+            'lotes_por_vencer': lotes_por_vencer,
+            'usuario': request.user
+        })
+
+        # Enviamos el correo al usuario que está conectado
+        send_mail(
+            subject=asunto,
+            message="", # Mensaje plano vacío porque usamos HTML
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[request.user.email], 
+            html_message=mensaje_html,
+            fail_silently=False,
+        )
+
+        messages.success(request, f'Informe enviado correctamente a {request.user.email}')
+    
+    except Exception as e:
+        messages.error(request, f'Error al enviar correo: {str(e)}')
+        print(f"Error Email: {e}")
+
+    return redirect('inventario_dashboard')
+
+
+@login_required
+def centro_datos(request):
+    """Vista principal del panel de exportación"""
+    return render(request, 'core/exportar_datos.html')
+
+@login_required
+def exportar_finanzas_csv(request):
+    """Genera un CSV con todos los gastos e ingresos listo para Power BI"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="dataset_finanzas.csv"'
+
+    writer = csv.writer(response)
+    # Encabezados limpios
+    writer.writerow(['ID', 'Fecha', 'Año', 'Mes', 'Tipo', 'Empresa', 'Centro Costo', 'Clasificacion', 'Descripcion', 'Detalle', 'Monto'])
+
+    # Consultamos optimizando las relaciones (select_related) para que sea rápido
+    movimientos = Ingreso.objects.select_related('empresa', 'centro_costo', 'clasificacion').all().order_by('-fecha')
+
+    for mov in movimientos:
+        writer.writerow([
+            mov.id,
+            mov.fecha,
+            mov.fecha.year,
+            mov.fecha.month,
+            mov.tipo_documento,
+            mov.empresa.nombre if mov.empresa else 'Sin Asignar',
+            mov.centro_costo.nombre if mov.centro_costo else 'General',
+            mov.clasificacion.nombre if mov.clasificacion else 'Sin Clasificar',
+            mov.descripcion_movimiento, # Nombre real en tu BD
+            mov.detalle,
+            mov.monto_transferencia
+        ])
+
+    return response
+
+@login_required
+def exportar_inventario_csv(request):
+    """Genera un CSV con el estado actual del stock (Lotes)"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="dataset_stock_actual.csv"'
+
+    writer = csv.writer(response)
+    writer.writerow(['SKU', 'Producto', 'Categoria', 'Nro Lote', 'Fecha Vencimiento', 'Dias para Vencer', 'Estado', 'Cantidad Stock'])
+
+    lotes = Lote.objects.select_related('producto').all().order_by('fecha_vencimiento')
+    hoy = datetime.date.today()
+
+    for lote in lotes:
+        # Calculamos estado para análisis
+        dias = (lote.fecha_vencimiento - hoy).days
+        estado = "VENCIDO" if dias < 0 else "POR VENCER" if dias <= 30 else "OK"
+
+        writer.writerow([
+            lote.producto.codigo,
+            lote.producto.nombre,
+            lote.producto.categoria,
+            lote.numero_lote,
+            lote.fecha_vencimiento,
+            dias,
+            estado,
+            lote.cantidad
+        ])
+
+    return response

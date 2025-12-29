@@ -6,17 +6,17 @@
     <td>
         <div>
             <div class="fw-bold text-dark">{{ t.nombre }}</div>
-            <div class="small text-muted" style="font-size: 0.75rem;">
-                {% if "Maquehue" in t.empresa.nombre %}
-                    <span class="text-success"><i class="bi bi-circle-fill" style="font-size: 6px;"></i> MQ</span>
+            <div class="small text-muted">
+                {% if t.empresa and "Maquehue" in t.empresa.nombre %}
+                    <span class="text-success fw-bold">MQ</span>
                 {% else %}
-                    <span class="text-info"><i class="bi bi-circle-fill" style="font-size: 6px;"></i> SM</span>
+                    <span class="text-info fw-bold">SM</span>
                 {% endif %}
             </div>
         </div>
     </td>
 
-    <td class="font-monospace text-muted small text-nowrap">{{ t.rut }}</td>
+    <td class="font-monospace small">{{ t.rut }}</td>
 
     <td>{{ t.cargo }}</td>
 
@@ -24,10 +24,10 @@
 
     <td class="text-center">
         {% if t.fecha_finiquito %}
-            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">Finiquitado</span>
+            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Finiquitado</span>
             <div class="small text-danger mt-1 text-nowrap" style="font-size: 0.7rem;">{{ t.fecha_finiquito|date:"d/m/Y" }}</div>
         {% else %}
-            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Vigente</span>
+            <span class="badge bg-success bg-opacity-10 text-success border border-success">Vigente</span>
         {% endif %}
     </td>
 
@@ -39,7 +39,7 @@
         {% endif %}
     </td>
 
-    <td class="text-end text-muted small text-nowrap">
+    <td class="text-end small text-nowrap">
         {% if t.tiempo_servicio != "-" %}
             {{ t.tiempo_servicio }}
         {% else %}
@@ -48,18 +48,16 @@
     </td>
 
     <td class="text-center">
-        <div class="btn-group shadow-sm">
-            <a href="{% url 'editar_trabajador' t.id %}" class="btn btn-sm btn-light border text-warning hover-scale" title="Editar">
-                <i class="bi bi-pencil-square"></i>
-            </a>
-        </div>
+        <a href="{% url 'editar_trabajador' t.id %}" class="btn btn-sm btn-light text-primary border" title="Editar">
+            <i class="bi bi-pencil-square"></i>
+        </a>
     </td>
 </tr>
 {% empty %}
 <tr>
     <td colspan="8" class="text-center py-5 text-muted">
-        <i class="bi bi-folder2-open fs-1 d-block mb-2"></i>
-        No hay trabajadores registrados.
+        <i class="bi bi-people fs-1 d-block mb-2"></i>
+        No hay trabajadores registrados (o el filtro no encontró resultados).
     </td>
 </tr>
 {% endfor %}

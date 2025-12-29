@@ -1,23 +1,59 @@
-# core/admin.py
 from django.contrib import admin
-from .models import Ingreso, Empresa, CentroCosto, Clasificacion
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.models import User
+from .models import (
+    Ingreso, Empresa, CentroCosto, Clasificacion, 
+    Egreso, CajaChica, Trabajador, Cargo, Perfil
+)
 
-# Configuración avanzada para la tabla principal
+# --- 1. CONFIGURACIÓN DE USUARIO (Con Script de RUT) ---
+admin.site.unregister(User) # Quitamos el admin original
+
+@admin.register(User)
+class CustomUserAdmin(UserAdmin):
+    # Esto carga el script que calcula el DV al crear usuarios
+    class Media:
+        js = ('core/js/admin_rut.js',)
+
+# --- 2. CONFIGURACIÓN DE INGRESOS ---
 @admin.register(Ingreso)
 class IngresoAdmin(admin.ModelAdmin):
-    # Columnas que se verán en la lista
     list_display = ('fecha', 'n_documento', 'monto_transferencia', 'empresa', 'estado', 'centro_costo')
-    
-    # Barra de búsqueda (puedes buscar por documento o nombre de empresa)
-    search_fields = ('n_documento', 'empresa__nombre', 'descripcion_movimiento')
-    
-    # Filtros laterales (para navegar rápido)
+    search_fields = ('n_documento', 'empresa__nombre')
     list_filter = ('estado', 'empresa', 'centro_costo', 'fecha')
-    
-    # Paginación (para no mostrar los 2300 de golpe)
     list_per_page = 50
 
-# Registramos las tablas simples
+# --- 3. CONFIGURACIÓN DE TRABAJADORES ---
+@admin.register(Trabajador)
+class TrabajadorAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'rut', 'cargo', 'empresa', 'estado')
+    search_fields = ('nombre', 'rut')
+    list_filter = ('empresa', 'estado')
+
+# --- 4. CONFIGURACIÓN DE CAJA CHICA ---
+@admin.register(CajaChica)
+class CajaChicaAdmin(admin.ModelAdmin):
+    list_display = ('fecha', 'responsable', 'monto', 'tipo_documento', 'descripcion')
+    list_filter = ('tipo_documento',)
+
+# --- 5. REGISTRO DE MODELOS SIMPLES ---
 admin.site.register(Empresa)
 admin.site.register(CentroCosto)
 admin.site.register(Clasificacion)
+admin.site.register(Egreso)
+admin.site.register(Cargo)
+admin.site.register(Perfil)
+
+from django.contrib import admin
+from .models import Producto, Lote
+
+class LoteInline(admin.TabularInline):
+    model = Lote
+    extra = 1
+
+class ProductoAdmin(admin.ModelAdmin):
+    list_display = ('codigo', 'nombre', 'stock_total')
+    inlines = [LoteInline] # Esto te permite agregar lotes DENTRO del producto
+
+admin.site.register(Producto, ProductoAdmin)
+admin.site.register(Lote)

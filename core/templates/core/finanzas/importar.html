@@ -1,0 +1,35 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-excel me-2"></i>Importar Finanzas</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-4">
+                        Sube tu archivo <strong>Control de Finanzas.xlsm</strong>. 
+                        El sistema leerá la fecha, descripción, monto y tipo.
+                    </p>
+
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label for="archivo_excel" class="form-label">Seleccionar archivo Excel</label>
+                            <input class="form-control" type="file" name="archivo_excel" id="archivo_excel" accept=".xlsx, .xls, .xlsm" required>
+                        </div>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">
+                                Procesar Archivo
+                            </button>
+                            <a href="{% url 'finanzas_dashboard' %}" class="btn btn-outline-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

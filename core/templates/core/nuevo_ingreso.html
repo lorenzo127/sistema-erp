@@ -28,12 +28,12 @@
                         </div>
 
                         <div class="mb-3">
-                            <label for="id_descripcion_movimiento" class="form-label requiredField">
+                            <label for="id_descripcion" class="form-label requiredField">
                                 Descripción del Movimiento<span class="asteriskField">*</span>
                             </label>
                             
                             <div class="input-group">
-                                <input type="text" name="descripcion_movimiento" class="form-control" required id="id_descripcion_movimiento" placeholder="Ej: Pago factura de internet...">
+                                <textarea name="descripcion" cols="40" rows="2" class="form-control" required id="id_descripcion" placeholder="Ej: Pago factura de internet..."></textarea>
                                 
                                 <button class="btn btn-warning text-dark fw-bold" type="button" id="btn-ia" title="Autocompletar Clasificación">
                                     <i class="bi bi-stars"></i> IA
@@ -44,8 +44,8 @@
                                 <i class="bi bi-info-circle me-1"></i>Escribe el detalle y presiona el botón amarillo.
                             </div>
                             
-                            {% if form.descripcion_movimiento.errors %}
-                                <div class="text-danger small mt-1">{{ form.descripcion_movimiento.errors }}</div>
+                            {% if form.descripcion.errors %}
+                                <div class="text-danger small mt-1">{{ form.descripcion.errors }}</div>
                             {% endif %}
                         </div>
 
@@ -63,25 +63,21 @@
                                 {{ form.centro_costo|as_crispy_field }}
                             </div>
                             <div class="col-md-6 mb-3">
-                                {{ form.tipo|as_crispy_field }}
+                                {{ form.tipo_documento|as_crispy_field }}
                             </div>
                         </div>
 
                          <div class="row">
                              <div class="col-md-6 mb-3">
-                                {{ form.n_documento|as_crispy_field }}
+                                {{ form.detalle|as_crispy_field }}
                             </div>
                             <div class="col-md-6 mb-3">
-                                {{ form.estado|as_crispy_field }}
+                                {{ form.iva|as_crispy_field }}
                             </div>
                         </div>
                         
-                        <div class="mb-3">
-                             {{ form.detalle|as_crispy_field }}
-                        </div>
-
                         <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                            <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+                            <a href="{% url 'lista_ingresos' %}" class="btn btn-secondary">
                                 Cancelar
                             </a>
                             <button type="submit" class="btn btn-success px-4 fw-bold">
@@ -98,56 +94,59 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const btnIA = document.getElementById('btn-ia');
-        // CORREGIDO: IDs actualizados según tu modelo
-        const inputDesc = document.getElementById('id_descripcion_movimiento');
+        
+        // CORREGIDO: IDs actualizados según los nombres reales del form de Django
+        const inputDesc = document.getElementById('id_descripcion'); // Antes era id_descripcion_movimiento
         const selectClas = document.getElementById('id_clasificacion'); 
         const feedback = document.getElementById('ia-feedback');
 
-        btnIA.addEventListener('click', function() {
-            const texto = inputDesc.value.trim();
+        if(btnIA && inputDesc){
+            btnIA.addEventListener('click', function() {
+                const texto = inputDesc.value.trim();
 
-            if (texto.length < 3) {
-                feedback.innerHTML = '<span class="text-danger">Escribe más detalle...</span>';
-                return;
-            }
+                if (texto.length < 3) {
+                    feedback.innerHTML = '<span class="text-danger">Escribe más detalle...</span>';
+                    return;
+                }
 
-            // Spinner
-            const iconoOriginal = btnIA.innerHTML;
-            btnIA.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-            btnIA.disabled = true;
+                // Spinner
+                const iconoOriginal = btnIA.innerHTML;
+                btnIA.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+                btnIA.disabled = true;
 
-            fetch(`/api/predecir/?texto=${encodeURIComponent(texto)}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.categoria) {
-                        // Nota: La API devuelve "categoria" pero buscamos en el select de "clasificacion"
-                        let encontrada = false;
-                        for (let i = 0; i < selectClas.options.length; i++) {
-                            if (selectClas.options[i].text.toLowerCase() === data.categoria.toLowerCase()) {
-                                selectClas.selectedIndex = i;
-                                encontrada = true;
-                                break;
+                fetch(`/api/predecir/?texto=${encodeURIComponent(texto)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.categoria) {
+                            let encontrada = false;
+                            for (let i = 0; i < selectClas.options.length; i++) {
+                                if (selectClas.options[i].text.toLowerCase() === data.categoria.toLowerCase()) {
+                                    selectClas.selectedIndex = i;
+                                    encontrada = true;
+                                    break;
+                                }
                             }
-                        }
 
-                        if (encontrada) {
-                            feedback.innerHTML = `<span class="text-success fw-bold">¡Sugerido: ${data.categoria}!</span>`;
-                            selectClas.style.backgroundColor = "#d1e7dd";
-                            setTimeout(() => selectClas.style.backgroundColor = "", 1000);
+                            if (encontrada) {
+                                feedback.innerHTML = `<span class="text-success fw-bold">¡Sugerido: ${data.categoria}!</span>`;
+                                selectClas.style.backgroundColor = "#d1e7dd";
+                                setTimeout(() => selectClas.style.backgroundColor = "", 1000);
+                            } else {
+                                feedback.innerHTML = `<span class="text-muted">La IA sugiere "${data.categoria}", pero no está en la lista.</span>`;
+                            }
                         } else {
-                            feedback.innerHTML = `<span class="text-muted">La IA sugiere "${data.categoria}", pero no está en la lista.</span>`;
+                            feedback.innerHTML = '<span class="text-muted">No estoy seguro. Clasifica manual y aprenderé.</span>';
+                            // Intentamos entrenar en segundo plano si falla
+                            fetch('/api/entrenar-ia/');
                         }
-                    } else {
-                        feedback.innerHTML = '<span class="text-muted">No estoy seguro. Clasifica manual y aprenderé.</span>';
-                        fetch('/api/entrenar-ia/');
-                    }
-                })
-                .catch(err => feedback.innerHTML = 'Error de conexión IA')
-                .finally(() => {
-                    btnIA.innerHTML = iconoOriginal;
-                    btnIA.disabled = false;
-                });
-        });
+                    })
+                    .catch(err => feedback.innerHTML = 'Error de conexión IA')
+                    .finally(() => {
+                        btnIA.innerHTML = iconoOriginal;
+                        btnIA.disabled = false;
+                    });
+            });
+        }
     });
 </script>
 {% endblock %}

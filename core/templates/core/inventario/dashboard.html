@@ -1,0 +1,150 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 text-gray-800">Control de Cadena de Frío y Stock</h1>
+        
+        <div>
+            <a href="{% url 'enviar_alerta' %}" class="btn btn-info shadow-sm me-2 text-white" title="Enviar reporte de vencimientos por correo">
+                <i class="bi bi-envelope-fill me-2"></i>Reporte
+            </a>
+
+            <a href="{% url 'salida_stock' %}" class="btn btn-danger shadow-sm me-2" title="Descontar stock (Venta/Baja)">
+                <i class="bi bi-box-arrow-right me-2"></i>Salida (FIFO)
+            </a>
+
+            <a href="{% url 'ingresar_lote' %}" class="btn btn-primary shadow-sm" title="Ingresar nueva compra">
+                <i class="bi bi-box-seam me-2"></i>Ingresar Lote
+            </a>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        {% if alerta_roja > 0 %}
+        <div class="col-12 mb-3">
+            <div class="alert alert-danger d-flex align-items-center shadow-sm" role="alert">
+                <i class="bi bi-exclamation-octagon-fill fs-3 me-3"></i>
+                <div>
+                    <strong>¡ALERTA CRÍTICA!</strong>
+                    Tienes <strong>{{ alerta_roja }}</strong> lotes de productos que YA HAN VENCIDO. Deben ser retirados inmediatamente.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if alerta_amarilla > 0 %}
+        <div class="col-12">
+            <div class="alert alert-warning d-flex align-items-center shadow-sm" role="alert">
+                <i class="bi bi-exclamation-triangle-fill fs-3 me-3"></i>
+                <div>
+                    <strong>Atención:</strong>
+                    Hay <strong>{{ alerta_amarilla }}</strong> lotes que vencen en los próximos 30 días. Priorizar venta.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="card shadow mb-4 border-left-warning">
+        <div class="card-header py-3 bg-white d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-warning">
+                <i class="bi bi-clock-history me-2"></i>Próximos Vencimientos (Prioridad FIFO)
+            </h6>
+            <small class="text-muted">Estos productos deben salir primero</small>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Producto</th>
+                            <th>Lote / Batch</th>
+                            <th>Vence el</th>
+                            <th>Días Restantes</th>
+                            <th>Stock Lote</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lote in lotes_vencidos %}
+                        <tr class="table-danger">
+                            <td class="fw-bold">{{ lote.producto.nombre }}</td>
+                            <td>{{ lote.numero_lote }}</td>
+                            <td>{{ lote.fecha_vencimiento|date:"d/m/Y" }}</td>
+                            <td class="fw-bold text-danger">Vencido hace {{ lote.dias_para_vencer|stringformat:"+d" }} días</td>
+                            <td>{{ lote.cantidad }} un.</td>
+                            <td><span class="badge bg-danger">NO VENDER</span></td>
+                        </tr>
+                        {% endfor %}
+
+                        {% for lote in lotes_por_vencer %}
+                        <tr class="table-warning">
+                            <td class="fw-bold">{{ lote.producto.nombre }}</td>
+                            <td>{{ lote.numero_lote }}</td>
+                            <td>{{ lote.fecha_vencimiento|date:"d/m/Y" }}</td>
+                            <td class="fw-bold">{{ lote.dias_para_vencer }} días</td>
+                            <td>{{ lote.cantidad }} un.</td>
+                            <td><span class="badge bg-warning text-dark">PRIORIDAD</span></td>
+                        </tr>
+                        {% empty %}
+                        {% if not lotes_vencidos %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted py-3">
+                                <i class="bi bi-check-circle me-2"></i>No hay alertas de vencimiento. Todo el stock está fresco.
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Inventario General Consolidado</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>SKU / Código</th>
+                            <th>Nombre del Producto</th>
+                            <th>Categoría</th>
+                            <th class="text-center">Stock Total</th>
+                            <th class="text-center">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in productos %}
+                        <tr>
+                            <td><code>{{ p.codigo }}</code></td>
+                            <td class="fw-bold">{{ p.nombre }}</td>
+                            <td>{{ p.categoria }}</td>
+                            <td class="text-center fs-5">
+                                {{ p.stock_total }}
+                            </td>
+                            <td class="text-center">
+                                {% if p.stock_total <= p.stock_minimo %}
+                                    <span class="badge bg-danger">Bajo Stock (Min: {{ p.stock_minimo }})</span>
+                                {% else %}
+                                    <span class="badge bg-success">Normal</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center">No hay productos registrados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

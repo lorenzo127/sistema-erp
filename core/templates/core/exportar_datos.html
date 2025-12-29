@@ -1,0 +1,76 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Centro de Datos & Business Intelligence</h1>
+        <p class="mb-0 text-muted">Descarga datasets normalizados para Power BI, KNIME o Excel.</p>
+    </div>
+
+    <div class="row">
+        
+        <div class="col-xl-6 col-md-6 mb-4">
+            <div class="card border-left-primary shadow h-100 py-2" style="border-left: 5px solid #4e73df;">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                Dataset Financiero</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">Ingresos y Gastos</div>
+                            <p class="small text-muted mt-2">
+                                Contiene historial completo con dimensiones: Empresa, Centro de Costo, Clasificación, Fechas y Montos.
+                            </p>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-file-earmark-spreadsheet-fill fs-1 text-gray-300"></i>
+                        </div>
+                    </div>
+                    <a href="{% url 'export_finanzas' %}" class="btn btn-primary w-100 mt-3">
+                        <i class="bi bi-download me-2"></i>Descargar CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6 col-md-6 mb-4">
+            <div class="card border-left-success shadow h-100 py-2" style="border-left: 5px solid #1cc88a;">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Snapshot de Inventario</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">Stock Actual y Lotes</div>
+                            <p class="small text-muted mt-2">
+                                Detalle lote por lote. Incluye cálculo de días de vencimiento y semáforo de estado (Vencido/OK).
+                            </p>
+                        </div>
+                        <div class="col-auto">
+                            <i class="bi bi-boxes fs-1 text-gray-300"></i>
+                        </div>
+                    </div>
+                    <a href="{% url 'export_stock' %}" class="btn btn-success w-100 mt-3">
+                        <i class="bi bi-download me-2"></i>Descargar CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-dark">Cómo conectar con Power BI / KNIME</h6>
+        </div>
+        <div class="card-body">
+            <ol>
+                <li>Descarga los archivos <strong>.csv</strong> usando los botones de arriba.</li>
+                <li>Abre Power BI Desktop.</li>
+                <li>Selecciona <strong>Obtener Datos > Texto/CSV</strong>.</li>
+                <li>Los archivos ya vienen con codificación <strong>UTF-8</strong> y separadores estándar.</li>
+                <li><em>Tip Pro:</em> Como los datos ya están limpios, puedes arrastrar directamente al canvas para crear gráficos.</li>
+            </ol>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
