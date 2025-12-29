@@ -61,14 +61,19 @@
                 ${{ ingreso.monto_transferencia|intcomma }}
             </td>
             
-            <td class="text-center">
+                <td class="text-center">
                 <div class="btn-group shadow-sm" role="group">
-                    <a href="#" class="btn btn-sm btn-light border text-warning hover-scale" title="Editar">
+                    
+                    <a href="{% url 'editar_ingreso' ingreso.id %}" class="btn btn-sm btn-light border text-warning hover-scale" title="Editar">
                         <i class="bi bi-pencil-square"></i>
                     </a>
-                    <a href="#" class="btn btn-outline-danger btn-sm btn-eliminar" title="Eliminar">
+
+                    <a href="{% url 'eliminar_ingreso' ingreso.id %}" 
+                       class="btn btn-outline-danger btn-sm btn-eliminar" 
+                       title="Eliminar">
                         <i class="bi bi-trash"></i>
                     </a>
+
                 </div>
             </td>
         </tr>

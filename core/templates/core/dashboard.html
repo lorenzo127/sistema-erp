@@ -6,15 +6,15 @@
 
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Panel de Control General</h1>
-        <span class="d-none d-sm-inline-block btn btn-sm btn-light shadow-sm text-secondary">
-            <i class="bi bi-calendar-event me-2"></i>{{ hoy|date:"d \d\e F \d\e Y" }}
+        <span class="d-none d-sm-inline-block btn btn-sm btn-white shadow-sm text-secondary border">
+            <i class="bi bi-calendar-date me-1"></i> {{ fecha_actual|date:"d \d\e F \d\e Y" }}
         </span>
     </div>
 
     <div class="row">
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-danger shadow h-100 py-2" style="border-left: 5px solid #e74a3b;">
+            <div class="card border-start border-4 border-danger shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
@@ -23,83 +23,94 @@
                             <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stock_vencido }} Lotes</div>
                         </div>
                         <div class="col-auto">
-                            <i class="bi bi-exclamation-octagon-fill fs-2 text-gray-300" style="color: #e74a3b;"></i>
+                            <i class="bi bi-exclamation-octagon-fill fs-2 text-gray-300"></i>
                         </div>
                     </div>
-                    {% if stock_vencido > 0 %}
-                    <a href="{% url 'inventario_dashboard' %}" class="btn btn-sm btn-danger mt-3 w-100">Ver y Retirar</a>
-                    {% endif %}
                 </div>
             </div>
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-warning shadow h-100 py-2" style="border-left: 5px solid #f6c23e;">
+            <div class="card border-start border-4 border-warning shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Vencen en 30 días</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stock_por_vencer }} Lotes</div>
+                                Vencen en 30 Días</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stock_critico }} Lotes</div>
                         </div>
                         <div class="col-auto">
-                            <i class="bi bi-exclamation-triangle-fill fs-2 text-warning"></i>
+                            <i class="bi bi-bell-fill fs-2 text-gray-300"></i>
                         </div>
                     </div>
-                    {% if stock_por_vencer > 0 %}
-                    <a href="{% url 'inventario_dashboard' %}" class="btn btn-sm btn-light text-warning mt-3 w-100 fw-bold">Gestionar</a>
-                    {% endif %}
                 </div>
             </div>
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-primary shadow h-100 py-2" style="border-left: 5px solid #4e73df;">
+            <div class="card border-start border-4 border-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
-                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                                Gastos Operativos (Mes)</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">${{ gastos_mes|intcomma }}</div>
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Balance (Este Mes)</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">
+                                ${{ resultado_mes|intcomma }}
+                            </div>
+                            <small class="text-muted">Ingresos vs Gastos</small>
                         </div>
                         <div class="col-auto">
-                            <i class="bi bi-cash-coin fs-2 text-gray-300"></i>
+                            <i class="bi bi-wallet2 fs-2 text-gray-300"></i>
                         </div>
                     </div>
-                    <a href="{% url 'lista_ingresos' %}" class="small text-primary mt-3 d-block">Ver detalle de gastos <i class="bi bi-arrow-right"></i></a>
                 </div>
             </div>
         </div>
 
         <div class="col-xl-3 col-md-6 mb-4">
-            <div class="card border-left-info shadow h-100 py-2" style="border-left: 5px solid #36b9cc;">
+            <div class="card border-start border-4 border-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                                 Personal Activo</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ trabajadores_activos }}</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ personal_activo }}</div>
+                            <a href="{% url 'dashboard_rrhh' %}" class="small text-info stretched-link">Ir a planilla →</a>
                         </div>
                         <div class="col-auto">
                             <i class="bi bi-people-fill fs-2 text-gray-300"></i>
                         </div>
                     </div>
-                    <a href="{% url 'dashboard_rrhh' %}" class="small text-info mt-3 d-block">Ir a planilla <i class="bi bi-arrow-right"></i></a>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="row">
-        <div class="col-lg-6 mb-4">
+        
+        <div class="col-xl-8 col-lg-7">
             <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Accesos Directos</h6>
+                <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between bg-white">
+                    <h6 class="m-0 font-weight-bold text-primary">Flujo de Caja (Mes Actual)</h6>
                 </div>
                 <div class="card-body">
-                    <div class="d-grid gap-2">
+                    <div style="height: 300px;">
+                        <canvas id="graficoBalance"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-4 col-lg-5">
+            
+            <div class="card shadow mb-4">
+                <div class="card-header py-3 bg-white">
+                    <h6 class="m-0 font-weight-bold text-primary">Accesos Rápidos</h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-3">
                         <a href="{% url 'ingresar_lote' %}" class="btn btn-outline-primary text-start">
-                            <i class="bi bi-box-seam me-2"></i> Ingresar Mercadería (Stock)
+                            <i class="bi bi-box-seam me-2"></i> Ingresar Mercadería
                         </a>
                         <a href="{% url 'nuevo_ingreso' %}" class="btn btn-outline-success text-start">
                             <i class="bi bi-receipt me-2"></i> Registrar Gasto / Factura
@@ -110,24 +121,65 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="col-lg-6 mb-4">
             <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Estado del Sistema</h6>
+                <div class="card-header py-3 bg-white">
+                    <h6 class="m-0 font-weight-bold text-dark">Estado del Sistema</h6>
                 </div>
-                <div class="card-body">
-                    <p>Bienvenido al ERP <strong>Finanzas & Logística</strong>.</p>
-                    <ul>
-                        <li><strong>Base de Datos:</strong> Conectada</li>
-                        <li><strong>Módulo IA:</strong> Activo (Clasificación de gastos)</li>
-                        <li><strong>Notificaciones:</strong> Email Configurado</li>
+                <div class="card-body small">
+                    <p class="mb-2">Bienvenido al ERP <strong>Finanzas & Logística</strong>.</p>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2"><i class="bi bi-check-circle-fill text-success me-2"></i> Base de Datos: <strong>Conectada</strong></li>
+                        <li class="mb-2"><i class="bi bi-cpu-fill text-primary me-2"></i> Módulo IA: <strong>Activo</strong></li>
+                        <li><i class="bi bi-shield-check text-info me-2"></i> Seguridad: <strong>SSL Habilitado</strong></li>
                     </ul>
                 </div>
             </div>
+
         </div>
     </div>
 
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Gráfico de Ingresos vs Gastos
+    const ctx = document.getElementById('graficoBalance').getContext('2d');
+    
+    // Datos traídos desde Django
+    const ingresos = {{ total_ingresos|default:0 }};
+    const gastos = {{ total_gastos|default:0 }};
+
+    new Chart(ctx, {
+        type: 'doughnut', 
+        data: {
+            labels: ['Ingresos', 'Gastos'],
+            datasets: [{
+                data: [ingresos, gastos],
+                backgroundColor: ['#1cc88a', '#e74a3b'], // Verde y Rojo
+                hoverBackgroundColor: ['#17a673', '#2e59d9'],
+                borderWidth: 1
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            cutout: '70%', // Hace la dona más fina
+            plugins: {
+                legend: { position: 'bottom' },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.label || '';
+                            if (label) { label += ': '; }
+                            label += new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(context.raw);
+                            return label;
+                        }
+                    }
+                }
+            }
+        },
+    });
+</script>
 {% endblock %}

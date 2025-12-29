@@ -10,7 +10,7 @@
                     <h4 class="fw-bold text-success mb-0">
                         <i class="bi bi-plus-circle-fill me-2"></i>Registrar Nuevo Gasto
                     </h4>
-                    <p class="text-muted small mt-1">Complete el formulario. Use la IA para autocompletar la clasificación.</p>
+                    <p class="text-muted small mt-1">Complete el formulario. El sistema calculará el IVA automáticamente.</p>
                 </div>
 
                 <div class="card-body p-4">
@@ -33,19 +33,19 @@
                             </label>
                             
                             <div class="input-group">
-                                <textarea name="descripcion" cols="40" rows="2" class="form-control" required id="id_descripcion" placeholder="Ej: Pago factura de internet..."></textarea>
+                                {{ form.descripcion_movimiento }} 
                                 
                                 <button class="btn btn-warning text-dark fw-bold" type="button" id="btn-ia" title="Autocompletar Clasificación">
                                     <i class="bi bi-stars"></i> IA
                                 </button>
                             </div>
                             
-                            <div class="form-text mt-1" id="ia-feedback">
-                                <i class="bi bi-info-circle me-1"></i>Escribe el detalle y presiona el botón amarillo.
+                            <div class="form-text mt-1 d-flex justify-content-between">
+                                <span id="ia-feedback"><i class="bi bi-info-circle me-1"></i>Escribe el detalle y presiona el botón amarillo.</span>
                             </div>
                             
-                            {% if form.descripcion.errors %}
-                                <div class="text-danger small mt-1">{{ form.descripcion.errors }}</div>
+                            {% if form.descripcion_movimiento.errors %}
+                                <div class="text-danger small mt-1">{{ form.descripcion_movimiento.errors }}</div>
                             {% endif %}
                         </div>
 
@@ -68,11 +68,33 @@
                         </div>
 
                          <div class="row">
-                             <div class="col-md-6 mb-3">
+                             <div class="col-md-12 mb-3">
                                 {{ form.detalle|as_crispy_field }}
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="col-md-6 mb-3 d-none">
                                 {{ form.iva|as_crispy_field }}
+                            </div>
+                        </div>
+
+                        <div class="alert alert-light border border-primary bg-light mt-2" id="calculadoraIVA" style="display:none;">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="bi bi-calculator-fill text-primary me-2"></i>
+                                <h6 class="m-0 fw-bold text-uppercase text-primary small">Desglose Automático (19%)</h6>
+                            </div>
+                            
+                            <div class="row text-center">
+                                <div class="col-4 border-end">
+                                    <small class="text-muted d-block">Neto</small>
+                                    <span class="fw-bold" id="txtNeto">$0</span>
+                                </div>
+                                <div class="col-4 border-end">
+                                    <small class="text-danger d-block">IVA (Crédito)</small>
+                                    <span class="fw-bold text-danger" id="txtIva">$0</span>
+                                </div>
+                                <div class="col-4">
+                                    <small class="text-success d-block">Total Pagado</small>
+                                    <span class="fw-bold text-success" id="txtTotal">$0</span>
+                                </div>
                             </div>
                         </div>
                         
@@ -81,7 +103,7 @@
                                 Cancelar
                             </a>
                             <button type="submit" class="btn btn-success px-4 fw-bold">
-                                <i class="bi bi-save me-1"></i> Guardar
+                                <i class="bi bi-save me-1"></i> Guardar Registro
                             </button>
                         </div>
                     </form>
@@ -90,22 +112,32 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_scripts %}
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        const btnIA = document.getElementById('btn-ia');
         
-        // CORREGIDO: IDs actualizados según los nombres reales del form de Django
-        const inputDesc = document.getElementById('id_descripcion'); // Antes era id_descripcion_movimiento
+        // --- 1. LÓGICA DE INTELIGENCIA ARTIFICIAL ---
+        const btnIA = document.getElementById('btn-ia');
+        // Buscamos el input por su ID generado por Django (generalmente id_nombrecampo)
+        // Asegúrate en tu navegador (Inspeccionar elemento) si es id_descripcion o id_descripcion_movimiento
+        const inputDesc = document.querySelector('[name="descripcion_movimiento"]') || document.getElementById('id_descripcion');
         const selectClas = document.getElementById('id_clasificacion'); 
         const feedback = document.getElementById('ia-feedback');
+
+        // Estilos para que el input se vea bien junto al botón
+        if(inputDesc) {
+            inputDesc.classList.add('form-control'); // Asegurar estilo Bootstrap
+            // inputDesc.parentElement.classList.add('flex-grow-1'); // Si es necesario
+        }
 
         if(btnIA && inputDesc){
             btnIA.addEventListener('click', function() {
                 const texto = inputDesc.value.trim();
 
                 if (texto.length < 3) {
-                    feedback.innerHTML = '<span class="text-danger">Escribe más detalle...</span>';
+                    feedback.innerHTML = '<span class="text-danger">Escribe más detalle para usar la IA...</span>';
                     return;
                 }
 
@@ -119,6 +151,7 @@
                     .then(data => {
                         if (data.categoria) {
                             let encontrada = false;
+                            // Buscar la opción en el select
                             for (let i = 0; i < selectClas.options.length; i++) {
                                 if (selectClas.options[i].text.toLowerCase() === data.categoria.toLowerCase()) {
                                     selectClas.selectedIndex = i;
@@ -128,9 +161,9 @@
                             }
 
                             if (encontrada) {
-                                feedback.innerHTML = `<span class="text-success fw-bold">¡Sugerido: ${data.categoria}!</span>`;
+                                feedback.innerHTML = `<span class="text-success fw-bold"><i class="bi bi-check-circle"></i> ¡Sugerido: ${data.categoria}!</span>`;
                                 selectClas.style.backgroundColor = "#d1e7dd";
-                                setTimeout(() => selectClas.style.backgroundColor = "", 1000);
+                                setTimeout(() => selectClas.style.backgroundColor = "", 1500);
                             } else {
                                 feedback.innerHTML = `<span class="text-muted">La IA sugiere "${data.categoria}", pero no está en la lista.</span>`;
                             }
@@ -147,6 +180,49 @@
                     });
             });
         }
+
+        // --- 2. LÓGICA DE CÁLCULO DE IVA ---
+        const inputMonto = document.getElementById('id_monto_transferencia');
+        const inputTipo = document.getElementById('id_tipo_documento');
+        const inputIVA = document.getElementById('id_iva');
+        const boxCalculadora = document.getElementById('calculadoraIVA');
+
+        // Función para ocultar campo IVA manual (Protección contra errores humanos)
+        if (inputIVA) {
+            // Buscamos el div padre que crea crispy forms (mb-3) para ocultarlo completo
+            const parentDiv = inputIVA.closest('.mb-3');
+            if (parentDiv) parentDiv.style.display = 'none';
+        }
+
+        function calcularDesglose() {
+            if (!inputMonto || !inputTipo) return;
+
+            let total = parseInt(inputMonto.value) || 0;
+            let tipo = inputTipo.value.toUpperCase();
+
+            // Solo mostramos cálculo si hay monto > 0 y es documento tributario
+            if (total > 0 && (tipo.includes('FACTURA') || tipo.includes('BOLETA') || tipo.includes('NOTA'))) {
+                let neto = Math.round(total / 1.19);
+                let iva = total - neto;
+
+                document.getElementById('txtNeto').textContent = '$' + neto.toLocaleString('es-CL');
+                document.getElementById('txtIva').textContent = '$' + iva.toLocaleString('es-CL');
+                document.getElementById('txtTotal').textContent = '$' + total.toLocaleString('es-CL');
+                
+                // Mostrar la cajita
+                boxCalculadora.style.display = 'block';
+                boxCalculadora.classList.add('animate__animated', 'animate__fadeIn'); // Si tienes animate.css
+            } else {
+                boxCalculadora.style.display = 'none';
+            }
+        }
+
+        // Escuchar cambios en tiempo real
+        if(inputMonto) inputMonto.addEventListener('input', calcularDesglose);
+        if(inputTipo) inputTipo.addEventListener('change', calcularDesglose);
+        
+        // Ejecutar al cargar por si es una edición
+        calcularDesglose();
     });
 </script>
 {% endblock %}

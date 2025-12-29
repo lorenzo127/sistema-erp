@@ -4,7 +4,7 @@ import json
 import os
 import pandas as pd
 import csv
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 # --- IMPORTS DJANGO ---
 from django.conf import settings
 from django.contrib import messages
@@ -16,15 +16,12 @@ from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Avg, Count, IntegerField, Q, Sum
-from django.db.models.functions import Cast, TruncDay, TruncMonth
-from django.http import HttpResponse, JsonResponse
+from django.db.models.functions import Cast, TruncDay, TruncMonth, TruncDay
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
-from .forms import SalidaStockForm
 from django.core.mail import send_mail
-from django.template.loader import render_to_string
-from django.conf import settings
+
 # --- IMPORTS TERCEROS ---
 try:
     from weasyprint import HTML
@@ -41,8 +38,8 @@ from .models import (
     Trabajador, 
     Cargo, 
     Movimiento,
-    Producto, # Nuevo
-    Lote      # Nuevo
+    Producto, 
+    Lote      
 )
 
 from .forms import (
@@ -51,7 +48,8 @@ from .forms import (
     IngresoForm,
     RegistroUsuarioForm,
     TrabajadorForm,
-    LoteForm  # Nuevo
+    LoteForm,
+    SalidaStockForm
 )
 
 from .services import DashboardService
@@ -59,41 +57,62 @@ from .ia import entrenar_modelo, predecir_categoria
 
 
 # =========================================================
-# 1. DASHBOARD GENERAL (Página de Inicio)
+# 1. DASHBOARD GENERAL (Página de Inicio) - ACTUALIZADO
 # ========================================================
+# En core/views.py
+
+# En core/views.py
 
 @login_required
 def dashboard(request):
     """VISTA PRINCIPAL: COMANDO CENTRAL"""
     hoy = datetime.date.today()
-    fecha_limite = hoy + datetime.timedelta(days=30) # 30 días para alertas
+    inicio_mes = hoy.replace(day=1)
 
-    # --- 1. LOGÍSTICA (Alertas de Stock) ---
-    stock_vencido = Lote.objects.filter(fecha_vencimiento__lt=hoy).count()
-    stock_por_vencer = Lote.objects.filter(fecha_vencimiento__range=[hoy, fecha_limite]).count()
+    # Definimos qué palabras clave cuentan como dinero entrando
+    # Todo lo que NO esté aquí, se considerará Gasto/Salida
+    tipos_entrada = ['INGRESO', 'VENTA', 'ABONO', 'DEVOLUCION']
 
-    # --- 2. FINANZAS (Gastos del Mes Actual) ---
-    # Sumamos lo que cargaste en 'Ingresos/Gastos' correspondiente al mes actual
-    gastos_mes = Ingreso.objects.filter(
-        fecha__year=hoy.year,
-        fecha__month=hoy.month
+    # 1. KPI FINANCIEROS (Mes Actual)
+    
+    # A. GASTOS: Sumamos todo lo que NO sea entrada
+    # Esto atrapará: FACTURA, BOLETA, GASTO, PEAJE, etc.
+    total_gastos = Ingreso.objects.filter(
+        fecha__gte=inicio_mes
+    ).exclude(tipo_documento__in=tipos_entrada).aggregate(total=Sum('monto_transferencia'))['total'] or 0
+
+    # B. INGRESOS: Sumamos solo lo que sea entrada
+    total_ingresos = Ingreso.objects.filter(
+        fecha__gte=inicio_mes,
+        tipo_documento__in=tipos_entrada
     ).aggregate(total=Sum('monto_transferencia'))['total'] or 0
 
-    # --- 3. RRHH (Personal Activo) ---
-    trabajadores_activos = Trabajador.objects.filter(fecha_finiquito__isnull=True).count()
-    
-    # Calcular variación (ejemplo simple: RRHH)
-    # Podrías agregar más lógica aquí si quisieras comparar con el mes anterior
+    resultado_mes = total_ingresos - total_gastos
+
+    # 2. KPI INVENTARIO
+    stock_vencido = Lote.objects.filter(fecha_vencimiento__lt=hoy).count()
+    limite_alerta = hoy + datetime.timedelta(days=30)
+    stock_critico = Lote.objects.filter(
+        fecha_vencimiento__gte=hoy, 
+        fecha_vencimiento__lte=limite_alerta
+    ).count()
+
+    # 3. KPI RRHH
+    try:
+        personal_activo = Trabajador.objects.filter(fecha_finiquito__isnull=True).count()
+    except:
+        personal_activo = 0
 
     context = {
+        'total_gastos': total_gastos,
+        'total_ingresos': total_ingresos,
+        'resultado_mes': resultado_mes,
         'stock_vencido': stock_vencido,
-        'stock_por_vencer': stock_por_vencer,
-        'gastos_mes': gastos_mes,
-        'trabajadores_activos': trabajadores_activos,
-        'hoy': hoy,
+        'stock_critico': stock_critico,
+        'personal_activo': personal_activo,
+        'fecha_actual': hoy,
     }
     return render(request, 'core/dashboard.html', context)
-
 
 # =========================================================
 # 2. MÓDULO FINANZAS (Control de Movimientos .xlsm)
@@ -273,6 +292,7 @@ def lista_ingresos(request):
     # Filtros Fecha y Monto
     f_inicio = request.GET.get('fecha_inicio')
     f_fin = request.GET.get('fecha_fin')
+    
     if f_inicio: movimientos = movimientos.filter(fecha__gte=f_inicio)
     if f_fin: movimientos = movimientos.filter(fecha__lte=f_fin)
 
@@ -289,11 +309,39 @@ def lista_ingresos(request):
     elif orden == 'monto_desc': movimientos = movimientos.order_by('-monto_transferencia')
     else: movimientos = movimientos.order_by('-fecha')
 
-    # 4. Preparar Datos para el Gráfico (Agrupado por Mes de los datos filtrados)
-    # Nota: Usamos una copia del query para no afectar la paginación
-    datos_grafico = movimientos.annotate(mes=TruncMonth('fecha')).values('mes').annotate(total=Sum('monto_transferencia')).order_by('mes')
+    # 4. Preparar Datos para el Gráfico (LÓGICA INTELIGENTE DÍA/MES)
+    # -----------------------------------------------------------------
+    agrupar_por_dia = False
     
-    labels_grafico = [d['mes'].strftime('%Y-%m') for d in datos_grafico] if datos_grafico else []
+    # Verificamos si el rango de fechas es pequeño (menor a 60 días)
+    if f_inicio and f_fin:
+        try:
+            d1 = datetime.datetime.strptime(f_inicio, '%Y-%m-%d')
+            d2 = datetime.datetime.strptime(f_fin, '%Y-%m-%d')
+            dias_diff = abs((d2 - d1).days)
+            if dias_diff <= 60:
+                agrupar_por_dia = True
+        except ValueError:
+            pass # Si hay error en formato de fecha, usamos mensual por defecto
+
+    if agrupar_por_dia:
+        # Agrupar por DÍA (TruncDay)
+        # Usamos 'periodo' como nombre genérico para la agrupación
+        datos_grafico = movimientos.annotate(periodo=TruncDay('fecha'))\
+                                   .values('periodo')\
+                                   .annotate(total=Sum('monto_transferencia'))\
+                                   .order_by('periodo')
+        # Formato etiqueta: "05/08" (Día/Mes)
+        labels_grafico = [d['periodo'].strftime('%d/%m') for d in datos_grafico] if datos_grafico else []
+    else:
+        # Agrupar por MES (TruncMonth) - Comportamiento original
+        datos_grafico = movimientos.annotate(periodo=TruncMonth('fecha'))\
+                                   .values('periodo')\
+                                   .annotate(total=Sum('monto_transferencia'))\
+                                   .order_by('periodo')
+        # Formato etiqueta: "2025-08" (Año-Mes)
+        labels_grafico = [d['periodo'].strftime('%Y-%m') for d in datos_grafico] if datos_grafico else []
+
     data_grafico = [d['total'] for d in datos_grafico] if datos_grafico else []
 
     # 5. Paginación
@@ -325,20 +373,11 @@ def lista_ingresos(request):
         # Mantener filtros seleccionados en el HTML
         'orden_sel': orden,
         'per_page': int(per_page),
+        # Pasamos las fechas para mantenerlas en los inputs
+        'inicio_sel': f_inicio,
+        'fin_sel': f_fin,
     }
     return render(request, 'core/lista_ingresos.html', context)
-    
-@login_required
-def nuevo_ingreso(request):
-    if request.method == 'POST':
-        form = IngresoForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Registro guardado correctamente.')
-            return redirect('dashboard')
-    else:
-        form = IngresoForm()
-    return render(request, 'core/nuevo_ingreso.html', {'form': form})
 
 @login_required
 def editar_ingreso(request, id):
@@ -359,6 +398,7 @@ def eliminar_ingreso(request, id):
     ingreso.delete()
     messages.success(request, 'Registro eliminado correctamente.')
     return redirect('lista_ingresos')
+
 @login_required
 def importar_excel(request):
     """Importador con AUTO-CREACIÓN de Categorías y Centros de Costo"""
@@ -367,7 +407,6 @@ def importar_excel(request):
         if form.is_valid():
             archivo = request.FILES['archivo_excel']
             creados = 0
-            nuevos_datos = 0 # Contador para saber cuántas categorías nuevas creamos
             
             try:
                 # 1. Leer Excel (Fila 6 como encabezado)
@@ -391,8 +430,6 @@ def importar_excel(request):
                         monto = row.get('Monto Transferencia', 0)
                         if pd.isnull(monto) or monto == 0: continue
 
-                        # --- AQUÍ ESTÁ EL CAMBIO MÁGICO: get_or_create ---
-                        
                         # 1. Empresa (Si no existe, la crea)
                         nombre_empresa = str(row.get('Empresa', '')).strip()
                         empresa_obj = None
@@ -440,9 +477,9 @@ def importar_excel(request):
                             descripcion_movimiento=desc_movimiento,
                             tipo_documento=tipo_doc,
                             detalle=detalle_txt,
-                            empresa=empresa_obj,       # Ahora sí llevará dato
-                            centro_costo=centro_obj,   # Ahora sí llevará dato
-                            clasificacion=clasif_obj,  # Ahora sí llevará dato
+                            empresa=empresa_obj,
+                            centro_costo=centro_obj,
+                            clasificacion=clasif_obj,
                             iva=0
                         )
                         creados += 1
@@ -959,36 +996,48 @@ def salida_stock(request):
         if form.is_valid():
             producto = form.cleaned_data['producto']
             cantidad_solicitada = form.cleaned_data['cantidad']
+            precio_total = form.cleaned_data['precio_total'] # Nuevo dato
 
-            # 1. Verificar Stock Total
+            # 1. Verificar Stock
             stock_actual = producto.lote_set.aggregate(total=Sum('cantidad'))['total'] or 0
             
             if cantidad_solicitada > stock_actual:
-                messages.error(request, f'Error: No hay suficiente stock. Tienes {stock_actual}, pides {cantidad_solicitada}.')
+                messages.error(request, f'Error: Stock insuficiente. Tienes {stock_actual}, intentas vender {cantidad_solicitada}.')
             else:
-                # 2. Lógica FIFO (First In, First Out)
-                # Traemos los lotes ordenados por vencimiento (el más viejo primero)
-                lotes = Lote.objects.filter(producto=producto).order_by('fecha_vencimiento')
-                
-                cantidad_pendiente = cantidad_solicitada
-                
-                with transaction.atomic():
-                    for lote in lotes:
-                        if cantidad_pendiente <= 0:
-                            break
+                try:
+                    with transaction.atomic():
+                        # A. Lógica FIFO (Descontar Stock)
+                        lotes = Lote.objects.filter(producto=producto).order_by('fecha_vencimiento')
+                        pendiente = cantidad_solicitada
                         
-                        if lote.cantidad <= cantidad_pendiente:
-                            # Este lote se agota completo
-                            cantidad_pendiente -= lote.cantidad
-                            lote.delete() # Lo borramos para que no genere alertas de vencimiento vacías
-                        else:
-                            # Este lote tiene suficiente para cubrir lo que falta
-                            lote.cantidad -= cantidad_pendiente
-                            lote.save()
-                            cantidad_pendiente = 0
-                
-                messages.success(request, f'Se despacharon {cantidad_solicitada} unidades de {producto.nombre} correctamente.')
-                return redirect('inventario_dashboard')
+                        for lote in lotes:
+                            if pendiente <= 0: break
+                            
+                            if lote.cantidad <= pendiente:
+                                pendiente -= lote.cantidad
+                                lote.delete()
+                            else:
+                                lote.cantidad -= pendiente
+                                lote.save()
+                                pendiente = 0
+
+                        # B. Lógica FINANCIERA (Crear el Ingreso)
+                        Ingreso.objects.create(
+                            fecha=datetime.date.today(),
+                            tipo_documento='VENTA', # O boleta/factura
+                            monto_transferencia=precio_total,
+                            descripcion_movimiento=f"Venta de {cantidad_solicitada} x {producto.nombre}",
+                            detalle="Generado automáticamente desde Inventario",
+                            clasificacion=None, 
+                            empresa=None 
+                        )
+                    
+                    messages.success(request, f'¡Venta registrada! Stock descontado y ${precio_total} ingresados a caja.')
+                    return redirect('inventario_dashboard')
+
+                except Exception as e:
+                    messages.error(request, f"Error al procesar la venta: {e}")
+
     else:
         form = SalidaStockForm()
 
@@ -1102,3 +1151,19 @@ def exportar_inventario_csv(request):
         ])
 
     return response
+
+@login_required
+def nuevo_ingreso(request):
+    """REGISTRAR NUEVO GASTO / INGRESO"""
+    if request.method == 'POST':
+        form = IngresoForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Registro guardado correctamente.')
+            # Al guardar, te envía al Dashboard principal. 
+            # Si prefieres ir a la lista, cambia 'dashboard' por 'lista_ingresos'
+            return redirect('dashboard')
+    else:
+        form = IngresoForm()
+    
+    return render(request, 'core/nuevo_ingreso.html', {'form': form})
