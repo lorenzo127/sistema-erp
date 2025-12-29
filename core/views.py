@@ -247,89 +247,87 @@ def importar_finanzas(request):
 # =========================================================
 @login_required
 def lista_ingresos(request):
-    empresas = Empresa.objects.all().order_by('nombre')
-    centros = CentroCosto.objects.all().order_by('nombre')
-    clasificaciones = Clasificacion.objects.all().order_by('nombre')
+    # 1. Base Query
+    movimientos = Ingreso.objects.all()
+
+    # 2. Filtros
+    # Búsqueda texto
+    q = request.GET.get('q')
+    if q:
+        movimientos = movimientos.filter(
+            Q(descripcion_movimiento__icontains=q) |
+            Q(detalle__icontains=q) |
+            Q(empresa__nombre__icontains=q)
+        )
+
+    # Filtros Dropdown
+    empresa_id = request.GET.get('empresa')
+    if empresa_id: movimientos = movimientos.filter(empresa_id=empresa_id)
+
+    centro_id = request.GET.get('centro')
+    if centro_id: movimientos = movimientos.filter(centro_costo_id=centro_id)
+
+    clasif_id = request.GET.get('clasificacion')
+    if clasif_id: movimientos = movimientos.filter(clasificacion_id=clasif_id)
+
+    # Filtros Fecha y Monto
+    f_inicio = request.GET.get('fecha_inicio')
+    f_fin = request.GET.get('fecha_fin')
+    if f_inicio: movimientos = movimientos.filter(fecha__gte=f_inicio)
+    if f_fin: movimientos = movimientos.filter(fecha__lte=f_fin)
+
+    min_costo = request.GET.get('min_costo')
+    max_costo = request.GET.get('max_costo')
+    if min_costo: movimientos = movimientos.filter(monto_transferencia__gte=min_costo)
+    if max_costo: movimientos = movimientos.filter(monto_transferencia__lte=max_costo)
+
+    # 3. Ordenamiento
+    orden = request.GET.get('orden', 'fecha_desc')
+    if orden == 'fecha_asc': movimientos = movimientos.order_by('fecha')
+    elif orden == 'fecha_desc': movimientos = movimientos.order_by('-fecha')
+    elif orden == 'monto_asc': movimientos = movimientos.order_by('monto_transferencia')
+    elif orden == 'monto_desc': movimientos = movimientos.order_by('-monto_transferencia')
+    else: movimientos = movimientos.order_by('-fecha')
+
+    # 4. Preparar Datos para el Gráfico (Agrupado por Mes de los datos filtrados)
+    # Nota: Usamos una copia del query para no afectar la paginación
+    datos_grafico = movimientos.annotate(mes=TruncMonth('fecha')).values('mes').annotate(total=Sum('monto_transferencia')).order_by('mes')
     
-    f_empresa = request.GET.get('empresa')
-    f_centro = request.GET.get('centro')
-    f_clasif = request.GET.get('clasificacion')
-    f_min = request.GET.get('min_costo')
-    f_max = request.GET.get('max_costo')
-    f_fecha_inicio = request.GET.get('fecha_inicio')
-    f_fecha_fin = request.GET.get('fecha_fin')
-    f_orden = request.GET.get('orden', 'fecha_desc')
-    
-    es_ajax = request.GET.get('modo_ajax') == 'true'
-    pagina = request.GET.get('page', 1)
-    por_pagina = request.GET.get('per_page', 25) 
+    labels_grafico = [d['mes'].strftime('%Y-%m') for d in datos_grafico] if datos_grafico else []
+    data_grafico = [d['total'] for d in datos_grafico] if datos_grafico else []
 
-    ingresos = Ingreso.objects.select_related('empresa', 'centro_costo', 'clasificacion').annotate(
-        monto_real=Cast('monto_transferencia', output_field=IntegerField())
-    )
+    # 5. Paginación
+    per_page = request.GET.get('per_page', 25)
+    paginator = Paginator(movimientos, per_page)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
-    if f_empresa: ingresos = ingresos.filter(empresa_id=f_empresa)
-    if f_centro: ingresos = ingresos.filter(centro_costo_id=f_centro)
-    if f_clasif: ingresos = ingresos.filter(clasificacion_id=f_clasif)
-    if f_min:
-        try: ingresos = ingresos.filter(monto_real__gte=int(f_min.replace('.', '')))
-        except ValueError: pass
-    if f_max:
-        try: ingresos = ingresos.filter(monto_real__lte=int(f_max.replace('.', '')))
-        except ValueError: pass
-    if f_fecha_inicio: ingresos = ingresos.filter(fecha__gte=f_fecha_inicio)
-    if f_fecha_fin: ingresos = ingresos.filter(fecha__lte=f_fecha_fin)
-
-    if f_orden == 'monto_desc': ingresos = ingresos.order_by('-monto_real')
-    elif f_orden == 'monto_asc': ingresos = ingresos.order_by('monto_real')
-    elif f_orden == 'fecha_asc': ingresos = ingresos.order_by('fecha')
-    else: ingresos = ingresos.order_by('-fecha')
-
-    datos_grafico = ingresos.annotate(dia=TruncDay('fecha')).values('dia').annotate(total=Sum('monto_real')).order_by('dia')
-    labels_grafico = [d['dia'].strftime("%d/%m/%Y") for d in datos_grafico if d['dia']]
-    data_grafico = [d['total'] for d in datos_grafico if d['dia']]
-
-    paginator = Paginator(ingresos, por_pagina)
-    page_obj = paginator.get_page(pagina)
-
-    if es_ajax:
-        contexto_ajax = {
-            'ingresos': page_obj,
-            'empresa_sel': int(f_empresa) if f_empresa else None,
-            'centro_sel': int(f_centro) if f_centro else None,
-            'clasif_sel': int(f_clasif) if f_clasif else None,
-        }
-        html_tabla = render_to_string('core/partials/tabla_ingresos.html', contexto_ajax)
-        html_paginacion = render_to_string('core/partials/paginacion.html', {'page_obj': page_obj})
+    # --- RESPUESTA AJAX (Cuando filtras sin recargar) ---
+    if request.GET.get('modo_ajax'):
+        html_tabla = render_to_string('core/partials/tabla_ingresos.html', {'page_obj': page_obj}, request=request)
+        html_paginacion = render_to_string('core/partials/paginacion.html', {'page_obj': page_obj}, request=request)
         
         return JsonResponse({
-            'html_tabla': html_tabla, 
+            'html_tabla': html_tabla,
             'html_paginacion': html_paginacion,
             'grafico_labels': labels_grafico,
             'grafico_data': data_grafico
         })
 
+    # --- RESPUESTA NORMAL (Carga inicial) ---
     context = {
-        'ingresos': page_obj,
-        'empresas': empresas,
-        'centros': centros,
-        'clasificaciones': clasificaciones,
-        'empresa_sel': int(f_empresa) if f_empresa else None,
-        'centro_sel': int(f_centro) if f_centro else None,
-        'clasif_sel': int(f_clasif) if f_clasif else None,
-        'min_sel': f_min,
-        'max_sel': f_max,
-        'inicio_sel': f_fecha_inicio,
-        'fin_sel': f_fecha_fin,
-        'orden_sel': f_orden,
-        'filtros_activos': any([f_empresa, f_centro, f_clasif, f_min, f_max, f_fecha_inicio, f_fecha_fin]),
-        'per_page': int(por_pagina),
         'page_obj': page_obj,
+        'empresas': Empresa.objects.all(),
+        'centros': CentroCosto.objects.all(),
+        'clasificaciones': Clasificacion.objects.all(),
         'labels_grafico': labels_grafico,
         'data_grafico': data_grafico,
+        # Mantener filtros seleccionados en el HTML
+        'orden_sel': orden,
+        'per_page': int(per_page),
     }
     return render(request, 'core/lista_ingresos.html', context)
-
+    
 @login_required
 def nuevo_ingreso(request):
     if request.method == 'POST':

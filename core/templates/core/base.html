@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
     <style>
-        /* --- ESTILOS PROFESIONALES (ADMIN LAYOUT) --- */
+        /* --- ESTILOS DEL SISTEMA (ADMIN LAYOUT) --- */
         :root {
             --sidebar-width: 250px;
             --topbar-height: 70px;
@@ -27,7 +27,7 @@
             overflow-x: hidden;
         }
 
-        /* SIDEBAR */
+        /* SIDEBAR (Barra Lateral) */
         #sidebar {
             width: var(--sidebar-width);
             height: 100vh;
@@ -81,7 +81,7 @@
             font-size: 1.1rem;
         }
 
-        /* MAIN CONTENT */
+        /* MAIN CONTENT (Contenido Principal) */
         #content-wrapper {
             margin-left: var(--sidebar-width);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -91,7 +91,7 @@
             width: calc(100% - var(--sidebar-width));
         }
 
-        /* TOPBAR */
+        /* TOPBAR (Barra Superior) */
         .topbar {
             height: var(--topbar-height);
             background: white;
@@ -114,7 +114,7 @@
             box-shadow: 0 -0.15rem 1.75rem 0 rgba(58,59,69,.05);
         }
 
-        /* --- LÓGICA DE COLAPSO --- */
+        /* LÓGICA DE COLAPSO (Responsive) */
         #sidebar.toggled {
             margin-left: calc(var(--sidebar-width) * -1);
         }
@@ -148,7 +148,8 @@
 
             <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Finanzas</div>
 
-            <a class="nav-link {% if 'centro_datos' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'centro_datos' %}">
+            <a class="nav-link {% if 'centro_datos' in request.resolver_match.url_name %}active{% endif %}" 
+               href="{% url 'centro_datos' %}">
                 <i class="bi bi-graph-up-arrow"></i>
                 <span>Data & Reportes</span>
             </a>
@@ -186,10 +187,8 @@
                 <i class="bi bi-box-seam-fill"></i>
                 <span>Control de Stock</span>
             </a>
-
         </div>
-
-        </nav>
+    </nav>
 
     <div id="content-wrapper">
         
@@ -204,15 +203,13 @@
                     <span class="d-none d-lg-inline fw-bold small text-dark">
                         {{ user.first_name|default:user.username|title }}
                     </span>
-                    {% if user.perfil.imagen %}
-                        <img src="{{ user.perfil.imagen.url }}" class="rounded-circle border" width="32" height="32" style="object-fit: cover;">
-                    {% else %}
-                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" 
-                             style="width: 32px; height: 32px; font-size: 14px;">
-                            {{ user.username|slice:":1"|upper }}
-                        </div>
-                    {% endif %}
+                    
+                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" 
+                         style="width: 32px; height: 32px; font-size: 14px;">
+                        {{ user.username|slice:":1"|upper }}
+                    </div>
                 </a>
+                
                 <ul class="dropdown-menu dropdown-menu-end shadow border-0 animated--grow-in">
                     <li><h6 class="dropdown-header text-uppercase small text-muted">Cuenta</h6></li>
                     <li>
@@ -247,18 +244,17 @@
 
     <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
         $(document).ready(function() {
             
-            // --- 1. MENÚ HAMBURGUESA ---
+            // 1. Lógica Menú Hamburguesa
             $('#sidebarToggle').on('click', function() {
                 $('#sidebar').toggleClass('toggled');
             });
 
-            // --- 2. FIX GRÁFICOS ---
+            // 2. Fix para redibujar gráficos al colapsar menú
             const sidebarElement = document.getElementById('sidebar');
             if (sidebarElement) {
                 const observer = new MutationObserver(function(mutations) {
@@ -273,7 +269,7 @@
                 observer.observe(sidebarElement, { attributes: true });
             }
 
-            // --- 3. TOAST NOTIFICACIONES ---
+            // 3. Configuración de Alertas Toast
             const Toast = Swal.mixin({
                 toast: true,
                 position: 'top-end',
@@ -286,7 +282,7 @@
                 }
             });
 
-            // --- 4. MENSAJES DJANGO ---
+            // 4. Mostrar mensajes de Django
             {% if messages %}
                 {% for message in messages %}
                     var icono = 'info';
@@ -303,7 +299,7 @@
                 {% endfor %}
             {% endif %}
 
-            // --- 5. CONFIRMACIÓN BORRAR ---
+            // 5. Confirmación global para borrar
             $(document).on('click', '.btn-eliminar', function(e) {
                 e.preventDefault();
                 var url = $(this).attr('href');
