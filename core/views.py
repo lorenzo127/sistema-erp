@@ -4,7 +4,7 @@ import json
 import os
 import pandas as pd
 import csv
-
+from django.http import HttpResponse
 # --- IMPORTS DJANGO ---
 from django.conf import settings
 from django.contrib import messages
@@ -22,6 +22,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
 from .forms import SalidaStockForm
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
+from django.conf import settings
 # --- IMPORTS TERCEROS ---
 try:
     from weasyprint import HTML
