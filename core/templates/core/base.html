@@ -148,12 +148,10 @@
 
             <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Finanzas</div>
 
-                        <li class="nav-item">
-                <a class="nav-link" href="{% url 'centro_datos' %}">
-                    <i class="bi bi-graph-up-arrow"></i>
-                    <span>Data & Reportes</span>
-                </a>
-            </li>
+            <a class="nav-link {% if 'centro_datos' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'centro_datos' %}">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span>Data & Reportes</span>
+            </a>
             
             <a class="nav-link {% if 'finanzas' in request.resolver_match.url_name %}active{% endif %}" 
                href="{% url 'finanzas_dashboard' %}">
@@ -191,15 +189,7 @@
 
         </div>
 
-        <div class="mt-auto p-3">
-            <form method="post" action="{% url 'logout' %}">
-                {% csrf_token %}
-                <button class="btn btn-outline-light w-100 btn-sm" type="submit">
-                    <i class="bi bi-box-arrow-left me-1"></i> Salir
-                </button>
-            </form>
-        </div>
-    </nav>
+        </nav>
 
     <div id="content-wrapper">
         
