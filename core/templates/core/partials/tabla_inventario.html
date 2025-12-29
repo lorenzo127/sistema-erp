@@ -1,0 +1,62 @@
+{% load humanize %}
+
+<table class="table table-hover align-middle mb-0">
+    <thead class="table-light text-uppercase small text-secondary">
+        <tr>
+            <th>Producto</th>
+            <th>Categoría</th>
+            <th>Lote / Vencimiento</th>
+            <th class="text-center">Estado</th>
+            <th class="text-end">Stock</th>
+            <th class="text-center">Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for lote in page_obj %}
+        <tr>
+            <td>
+                <div class="fw-bold text-dark">{{ lote.producto.nombre }}</div>
+                <small class="text-muted">SKU: {{ lote.producto.codigo }}</small>
+            </td>
+
+            <td>
+                <span class="badge bg-light text-dark border">{{ lote.producto.categoria }}</span>
+            </td>
+
+            <td>
+                <div class="small fw-bold">{{ lote.numero_lote }}</div>
+                <div class="small text-muted">Vence: {{ lote.fecha_vencimiento|date:"d M Y" }}</div>
+            </td>
+
+            <td class="text-center">
+                {% now "Y-m-d" as hoy %}
+                {% if lote.fecha_vencimiento|date:"Y-m-d" < hoy %}
+                    <span class="badge bg-danger">VENCIDO</span>
+                {% elif lote.fecha_vencimiento|date:"Y-m-d" <= hoy|date:"Y-m-d" %} 
+                    <span class="badge bg-warning text-dark">CRÍTICO</span>
+                {% else %}
+                    <span class="badge bg-success bg-opacity-10 text-success">OK</span>
+                {% endif %}
+            </td>
+
+            <td class="text-end">
+                <span class="fw-bold fs-5">{{ lote.cantidad }}</span>
+                <small class="text-muted">unid.</small>
+            </td>
+
+            <td class="text-center">
+                <a href="{% url 'admin:core_lote_change' lote.id %}" target="_blank" class="btn btn-sm btn-link text-secondary" title="Editar en Admin">
+                    <i class="bi bi-pencil"></i>
+                </a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr>
+            <td colspan="6" class="text-center py-5 text-muted">
+                <i class="bi bi-box-seam fs-1 d-block mb-3 opacity-50"></i>
+                No hay productos en inventario con estos filtros.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

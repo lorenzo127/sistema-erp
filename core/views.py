@@ -790,30 +790,76 @@ def editar_trabajador(request, id):
 
 # =========================================================
 # 6. MÓDULO LOGÍSTICA / INVENTARIO
-# =========================================================
+# ========================================================
+# 
 @login_required
 def inventario_dashboard(request):
-    """Panel de Control de Stock y Vencimientos"""
+    # 1. Base Query (Traemos lotes con sus productos)
+    lotes = Lote.objects.select_related('producto').all().order_by('fecha_vencimiento')
+
+    # 2. Filtros
+    # Búsqueda Texto
+    q = request.GET.get('q')
+    if q:
+        lotes = lotes.filter(
+            Q(producto__nombre__icontains=q) |
+            Q(producto__codigo__icontains=q) |
+            Q(numero_lote__icontains=q)
+        )
+
+    # Filtro Categoría
+    categoria = request.GET.get('categoria')
+    if categoria:
+        lotes = lotes.filter(producto__categoria=categoria)
+
+    # Filtro Estado (Semáforo)
+    estado = request.GET.get('estado')
     hoy = datetime.date.today()
-    fecha_limite = hoy + datetime.timedelta(days=30) 
+    if estado == 'vencido':
+        lotes = lotes.filter(fecha_vencimiento__lt=hoy)
+    elif estado == 'por_vencer':
+        # Próximos 30 días
+        limite = hoy + datetime.timedelta(days=30)
+        lotes = lotes.filter(fecha_vencimiento__gte=hoy, fecha_vencimiento__lte=limite)
+    elif estado == 'ok':
+        lotes = lotes.filter(fecha_vencimiento__gt=hoy + datetime.timedelta(days=30))
 
-    # 1. LOTES EN PELIGRO
-    lotes_vencidos = Lote.objects.filter(fecha_vencimiento__lt=hoy)
-    lotes_por_vencer = Lote.objects.filter(fecha_vencimiento__range=[hoy, fecha_limite])
+    # 3. Datos para el Gráfico (Stock por Categoría)
+    # Agrupamos por categoría del producto y sumamos la cantidad
+    datos_grafico = lotes.values('producto__categoria').annotate(total_stock=Sum('cantidad')).order_by('-total_stock')
+    
+    labels_grafico = [d['producto__categoria'] for d in datos_grafico]
+    data_grafico = [d['total_stock'] for d in datos_grafico]
 
-    # 2. INVENTARIO COMPLETO
-    productos = Producto.objects.all()
+    # 4. Paginación
+    paginator = Paginator(lotes, 20) # 20 items por página
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
-    alerta_roja = lotes_vencidos.count()
-    alerta_amarilla = lotes_por_vencer.count()
+    # 5. Respuesta AJAX
+    if request.GET.get('modo_ajax'):
+        html_tabla = render_to_string('core/partials/tabla_inventario.html', {'page_obj': page_obj}, request=request)
+        html_paginacion = render_to_string('core/partials/paginacion.html', {'page_obj': page_obj}, request=request)
+        
+        return JsonResponse({
+            'html_tabla': html_tabla,
+            'html_paginacion': html_paginacion,
+            'grafico_labels': labels_grafico,
+            'grafico_data': data_grafico
+        })
+
+    # 6. Respuesta Normal (HTML completo)
+    # Obtenemos categorías únicas para el filtro dropdown
+    categorias = Producto.objects.values_list('categoria', flat=True).distinct()
 
     context = {
-        'lotes_vencidos': lotes_vencidos,
-        'lotes_por_vencer': lotes_por_vencer,
-        'productos': productos,
-        'alerta_roja': alerta_roja,
-        'alerta_amarilla': alerta_amarilla,
-        'hoy': hoy,
+        'page_obj': page_obj,
+        'categorias': categorias,
+        'labels_grafico': labels_grafico,
+        'data_grafico': data_grafico,
+        # Mantener filtros en el HTML
+        'cat_sel': categoria,
+        'estado_sel': estado,
     }
     return render(request, 'core/inventario/dashboard.html', context)
 

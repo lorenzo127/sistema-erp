@@ -247,6 +247,15 @@ class Producto(models.Model):
     
     def __str__(self):
         return f"{self.codigo} - {self.nombre}"
+    
+    def save(self, *args, **kwargs):
+        # Si tiene categoría, la convertimos a "Title Case" (Primera mayúscula)
+        if self.categoria:
+            self.categoria = self.categoria.title().strip() 
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.nombre} ({self.categoria})"
 
     @property
     def stock_total(self):
