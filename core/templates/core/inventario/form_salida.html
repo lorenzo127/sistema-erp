@@ -1,38 +1,32 @@
 {% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-lg-6">
-        <div class="card shadow mb-4 border-left-danger">
-            <div class="card-header py-3">
-                <h6 class="m-0 font-weight-bold text-danger">Salida de Mercadería (Venta/Despacho)</h6>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info small">
-                    <i class="bi bi-info-circle-fill me-1"></i>
-                    El sistema descontará automáticamente del <strong>Lote más próximo a vencer</strong>.
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-box-arrow-right me-2"></i>Registrar Salida / Venta</h4>
                 </div>
-
-                <form method="post">
-                    {% csrf_token %}
-                    
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Producto</label>
-                        {{ form.producto }}
+                <div class="card-body">
+                    <div class="alert alert-warning small">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        Esta acción descontará unidades del stock y generará un ingreso financiero automático.
                     </div>
 
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Cantidad a retirar</label>
-                        {{ form.cantidad }}
-                    </div>
-
-                    <div class="d-grid gap-2">
-                        <button type="submit" class="btn btn-danger">
-                            <i class="bi bi-box-arrow-right me-2"></i>Confirmar Salida
-                        </button>
-                        <a href="{% url 'inventario_dashboard' %}" class="btn btn-secondary">Cancelar</a>
-                    </div>
-                </form>
+                    <form method="post">
+                        {% csrf_token %}
+                        {{ form|crispy }}
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="bi bi-check-circle me-2"></i>Confirmar Salida
+                            </button>
+                            <a href="{% url 'inventario_dashboard' %}" class="btn btn-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

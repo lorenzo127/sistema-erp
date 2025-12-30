@@ -51,4 +51,6 @@ urlpatterns = [
     path('datos/', views.centro_datos, name='centro_datos'),
     path('datos/exportar-finanzas/', views.exportar_finanzas_csv, name='export_finanzas'),
     path('datos/exportar-stock/', views.exportar_inventario_csv, name='export_stock'),
+
+    path('reportes/excel/', views.exportar_excel, name='exportar_excel'),
 ]

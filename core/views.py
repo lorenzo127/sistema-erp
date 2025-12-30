@@ -7,6 +7,9 @@ import csv
 from django.http import HttpResponse, JsonResponse
 # --- IMPORTS DJANGO ---
 from django.conf import settings
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill
+from django.http import HttpResponse
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
@@ -1167,3 +1170,61 @@ def nuevo_ingreso(request):
         form = IngresoForm()
     
     return render(request, 'core/nuevo_ingreso.html', {'form': form})
+
+def exportar_excel(request):
+    # 1. Crear el libro de Excel y la hoja
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Reporte Financiero"
+
+    # 2. Definir los Encabezados de la tabla
+    headers = ['ID', 'Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto']
+    ws.append(headers)
+
+    # 3. Estilizar los Encabezados (Negrita, Fondo Gris, Centrado)
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
+    
+    for cell in ws[1]:  # Fila 1
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    # 4. Obtener los datos de la Base de Datos
+    # (Ajusta 'Movimiento' o 'Gasto' según como se llame tu modelo real)
+    from .models import Movimiento 
+    movimientos = Movimiento.objects.all().order_by('-fecha')
+
+    # 5. Escribir los datos fila por fila
+    for mov in movimientos:
+        ws.append([
+            mov.id,
+            mov.fecha.strftime('%d/%m/%Y'),  # Formato fecha limpio
+            mov.tipo,      # Ingreso o Gasto
+            str(mov.categoria),
+            mov.descripcion,
+            mov.monto
+        ])
+
+    # 6. Ajustar ancho de columnas automáticamente (Estético)
+    dim_holder = {}
+    for col in range(ws.min_column, ws.max_column + 1):
+        dim_holder[col] = 0
+        
+    # (Este bloque calcula el ancho ideal basado en el contenido)
+    for row in ws.iter_rows():
+        for cell in row:
+            if cell.value:
+                dim_holder[cell.column] = max((dim_holder[cell.column], len(str(cell.value))))
+    
+    for col, width in dim_holder.items():
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width + 2
+
+    # 7. Preparar la respuesta HTTP para descargar
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="Reporte_Finanzas.xlsx"'
+    
+    wb.save(response)
+    return response
