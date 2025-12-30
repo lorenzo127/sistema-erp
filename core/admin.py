@@ -11,9 +11,9 @@ admin.site.unregister(User) # Quitamos el admin original
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
-    # Esto carga el script que calcula el DV al crear usuarios
-    class Media:
-        js = ('core/js/admin_rut.js',)
+    # Hemos eliminado la clase Media y el js.
+    # Ahora se comporta como el admin por defecto de Django.
+    pass
 
 # --- 2. CONFIGURACIÓN DE INGRESOS ---
 @admin.register(Ingreso)

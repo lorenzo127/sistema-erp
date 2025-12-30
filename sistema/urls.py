@@ -3,12 +3,13 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
-# Importamos AMBAS vistas
-from core.views import CustomLoginView, AdminLoginView 
+# Ya no necesitamos importar AdminLoginView aquí
+from core.views import CustomLoginView 
 
 urlpatterns = [
-    # 1. Login ADMIN (Usa el diseño oscuro)
-    path('admin/login/', AdminLoginView.as_view(), name='admin_login'),
+    # --- CORRECCIÓN: Eliminamos la ruta personalizada del admin ---
+    # Al quitar esto, Django usará su vista por defecto que pide Username/Pass
+    # path('admin/login/', AdminLoginView.as_view(), name='admin_login'),
 
     # 2. Rutas normales
     path('admin/', admin.site.urls),

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acceso RUT | Sistema ERP</title>
+    <title>Acceso | Sistema ERP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     
@@ -48,13 +48,6 @@
             border-color: #2653d4;
             transform: translateY(-1px);
         }
-        /* Estilos específicos para el RUT */
-        .dv-box {
-            background-color: #e9ecef;
-            font-weight: bold;
-            text-align: center;
-            color: #495057;
-        }
     </style>
 </head>
 <body>
@@ -66,41 +59,49 @@
                 <div class="card card-login">
                     <div class="card-header">
                         <div class="mb-3">
-                            <i class="bi bi-person-badge-fill login-icon"></i>
+                            <i class="bi bi-person-circle login-icon"></i>
                         </div>
-                        <h4 class="fw-bold text-dark">Acceso Corporativo</h4>
-                        <p class="text-muted small">Ingrese su RUT para continuar</p>
+                        <h4 class="fw-bold text-dark">Bienvenido</h4>
+                        <p class="text-muted small">Ingrese sus credenciales para continuar</p>
                     </div>
                     
                     <div class="card-body p-4">
                         {% if form.errors %}
                             <div class="alert alert-danger d-flex align-items-center mb-3 small" role="alert">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                <div>Credenciales incorrectas</div>
+                                <div>Usuario o contraseña incorrectos</div>
                             </div>
                         {% endif %}
 
-                        <form method="POST" id="loginForm">
+                        <form method="POST">
                             {% csrf_token %}
                             
-                            <input type="hidden" name="username" id="id_username">
-
-                            <label class="form-label text-muted small fw-bold"><i class="bi bi-card-heading me-1"></i> RUT DEL USUARIO</label>
-                            <div class="input-group mb-3">
-                                <input type="number" class="form-control form-control-lg" id="rut_numero" placeholder="Ej: 11222333" required autofocus>
-                                <span class="input-group-text bg-white border-end-0">-</span>
-                                <input type="text" class="form-control form-control-lg dv-box" id="rut_dv" placeholder="DV" style="max-width: 60px;" readonly>
+                            <div class="mb-3">
+                                <label for="id_username" class="form-label text-secondary small fw-bold">CORREO ELECTRÓNICO</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0">
+                                        <i class="bi bi-envelope-fill text-primary"></i>
+                                    </span>
+                                    <input type="email" name="username" class="form-control border-start-0 bg-light py-2" 
+                                           placeholder="nombre@empresa.com" required autofocus id="id_username">
+                                </div>
                             </div>
 
-                            <div class="form-floating mb-3">
-                                <input type="password" name="password" class="form-control" id="id_password" placeholder="Contraseña" required>
-                                <label for="id_password"><i class="bi bi-lock me-1"></i> Contraseña</label>
+                            <div class="mb-4">
+                                <label for="id_password" class="form-label text-secondary small fw-bold">CONTRASEÑA</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0">
+                                        <i class="bi bi-lock-fill text-primary"></i>
+                                    </span>
+                                    <input type="password" name="password" class="form-control border-start-0 bg-light py-2" 
+                                           id="id_password" placeholder="••••••••" required>
+                                </div>
                             </div>
 
                             <div class="form-check mb-3">
                                 <input class="form-check-input" type="checkbox" name="recuerdame" id="customCheck">
                                 <label class="form-check-label text-secondary small" for="customCheck">
-                                    Recuérdame
+                                    Mantener sesión iniciada
                                 </label>
                             </div>
 
@@ -117,64 +118,7 @@
         </div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const inputNumero = document.getElementById('rut_numero');
-            const inputDv = document.getElementById('rut_dv');
-            const inputHiddenUsername = document.getElementById('id_username');
-            const form = document.getElementById('loginForm');
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-            // Función Módulo 11 para calcular DV
-            function calcularDV(rut) {
-                if (!rut || rut.length < 1) return '';
-                
-                let suma = 0;
-                let multiplicador = 2;
-                
-                // Recorrer el RUT de atrás hacia adelante
-                for (let i = rut.length - 1; i >= 0; i--) {
-                    suma += parseInt(rut.charAt(i)) * multiplicador;
-                    multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
-                }
-                
-                let resto = suma % 11;
-                let dv = 11 - resto;
-                
-                if (dv === 11) return '0';
-                if (dv === 10) return 'K';
-                return dv.toString();
-            }
-
-            // Escuchar cuando el usuario escribe
-            inputNumero.addEventListener('input', function() {
-                // 1. Limpiar caracteres no numéricos
-                let valor = this.value.replace(/[^0-9]/g, '');
-                
-                // 2. Limitar largo (opcional, ej: 8 dígitos)
-                if (valor.length > 9) valor = valor.slice(0, 9);
-                this.value = valor;
-
-                // 3. Calcular y mostrar DV
-                if (valor.length > 0) {
-                    const dv = calcularDV(valor);
-                    inputDv.value = dv;
-                    
-                    // 4. Llenar el campo oculto para Django (Ej: 11222333-4)
-                    inputHiddenUsername.value = valor + '-' + dv;
-                } else {
-                    inputDv.value = '';
-                    inputHiddenUsername.value = '';
-                }
-            });
-
-            // Validación al enviar (Prevenir envío si falta RUT)
-            form.addEventListener('submit', function(e) {
-                if (inputNumero.value.length < 1) {
-                    e.preventDefault();
-                    inputNumero.focus();
-                }
-            });
-        });
-    </script>
 </body>
 </html>

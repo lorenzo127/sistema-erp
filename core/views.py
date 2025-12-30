@@ -4,26 +4,27 @@ import json
 import os
 import pandas as pd
 import csv
-from django.http import HttpResponse, JsonResponse
-# --- IMPORTS DJANGO ---
-from django.conf import settings
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
-from django.http import HttpResponse
+
+# --- IMPORTS DJANGO ---
+from django.conf import settings
+from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.contrib.auth import update_session_auth_hash
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.models import Group
 from django.contrib.auth.views import LoginView
 from django.core.paginator import Paginator
+from django.core.mail import send_mail
+from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Avg, Count, IntegerField, Q, Sum
-from django.db.models.functions import Cast, TruncDay, TruncMonth, TruncDay
+from django.db.models.functions import Cast, TruncDay, TruncMonth
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django.core.mail import send_mail
 
 # --- IMPORTS TERCEROS ---
 try:
@@ -58,14 +59,23 @@ from .forms import (
 from .services import DashboardService
 from .ia import entrenar_modelo, predecir_categoria
 
+# =========================================================
+# 0. FUNCIONES DE SEGURIDAD (Permisos)
+# =========================================================
+def es_finanzas(user):
+    # Pasa si es Superusuario O pertenece al grupo Finanzas
+    return user.is_superuser or user.groups.filter(name='Finanzas').exists()
+
+def es_bodega(user):
+    return user.is_superuser or user.groups.filter(name='Bodega').exists()
+
+def es_rrhh(user):
+    return user.is_superuser or user.groups.filter(name='RRHH').exists()
+
 
 # =========================================================
-# 1. DASHBOARD GENERAL (Página de Inicio) - ACTUALIZADO
-# ========================================================
-# En core/views.py
-
-# En core/views.py
-
+# 1. DASHBOARD GENERAL (Página de Inicio)
+# =========================================================
 @login_required
 def dashboard(request):
     """VISTA PRINCIPAL: COMANDO CENTRAL"""
@@ -73,13 +83,10 @@ def dashboard(request):
     inicio_mes = hoy.replace(day=1)
 
     # Definimos qué palabras clave cuentan como dinero entrando
-    # Todo lo que NO esté aquí, se considerará Gasto/Salida
     tipos_entrada = ['INGRESO', 'VENTA', 'ABONO', 'DEVOLUCION']
 
     # 1. KPI FINANCIEROS (Mes Actual)
-    
     # A. GASTOS: Sumamos todo lo que NO sea entrada
-    # Esto atrapará: FACTURA, BOLETA, GASTO, PEAJE, etc.
     total_gastos = Ingreso.objects.filter(
         fecha__gte=inicio_mes
     ).exclude(tipo_documento__in=tipos_entrada).aggregate(total=Sum('monto_transferencia'))['total'] or 0
@@ -121,6 +128,7 @@ def dashboard(request):
 # 2. MÓDULO FINANZAS (Control de Movimientos .xlsm)
 # =========================================================
 @login_required
+@user_passes_test(es_finanzas)
 def finanzas_dashboard(request):
     """Dashboard Financiero con Filtros de Fecha."""
     
@@ -268,6 +276,7 @@ def importar_finanzas(request):
 # 3. MÓDULO INGRESOS / GASTOS (CRUD Clásico)
 # =========================================================
 @login_required
+@user_passes_test(es_finanzas)
 def lista_ingresos(request):
     # 1. Base Query
     movimientos = Ingreso.objects.all()
@@ -313,10 +322,8 @@ def lista_ingresos(request):
     else: movimientos = movimientos.order_by('-fecha')
 
     # 4. Preparar Datos para el Gráfico (LÓGICA INTELIGENTE DÍA/MES)
-    # -----------------------------------------------------------------
     agrupar_por_dia = False
     
-    # Verificamos si el rango de fechas es pequeño (menor a 60 días)
     if f_inicio and f_fin:
         try:
             d1 = datetime.datetime.strptime(f_inicio, '%Y-%m-%d')
@@ -325,24 +332,19 @@ def lista_ingresos(request):
             if dias_diff <= 60:
                 agrupar_por_dia = True
         except ValueError:
-            pass # Si hay error en formato de fecha, usamos mensual por defecto
+            pass 
 
     if agrupar_por_dia:
-        # Agrupar por DÍA (TruncDay)
-        # Usamos 'periodo' como nombre genérico para la agrupación
         datos_grafico = movimientos.annotate(periodo=TruncDay('fecha'))\
                                    .values('periodo')\
                                    .annotate(total=Sum('monto_transferencia'))\
                                    .order_by('periodo')
-        # Formato etiqueta: "05/08" (Día/Mes)
         labels_grafico = [d['periodo'].strftime('%d/%m') for d in datos_grafico] if datos_grafico else []
     else:
-        # Agrupar por MES (TruncMonth) - Comportamiento original
         datos_grafico = movimientos.annotate(periodo=TruncMonth('fecha'))\
                                    .values('periodo')\
                                    .annotate(total=Sum('monto_transferencia'))\
                                    .order_by('periodo')
-        # Formato etiqueta: "2025-08" (Año-Mes)
         labels_grafico = [d['periodo'].strftime('%Y-%m') for d in datos_grafico] if datos_grafico else []
 
     data_grafico = [d['total'] for d in datos_grafico] if datos_grafico else []
@@ -353,7 +355,7 @@ def lista_ingresos(request):
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # --- RESPUESTA AJAX (Cuando filtras sin recargar) ---
+    # --- RESPUESTA AJAX ---
     if request.GET.get('modo_ajax'):
         html_tabla = render_to_string('core/partials/tabla_ingresos.html', {'page_obj': page_obj}, request=request)
         html_paginacion = render_to_string('core/partials/paginacion.html', {'page_obj': page_obj}, request=request)
@@ -365,7 +367,7 @@ def lista_ingresos(request):
             'grafico_data': data_grafico
         })
 
-    # --- RESPUESTA NORMAL (Carga inicial) ---
+    # --- RESPUESTA NORMAL ---
     context = {
         'page_obj': page_obj,
         'empresas': Empresa.objects.all(),
@@ -373,10 +375,8 @@ def lista_ingresos(request):
         'clasificaciones': Clasificacion.objects.all(),
         'labels_grafico': labels_grafico,
         'data_grafico': data_grafico,
-        # Mantener filtros seleccionados en el HTML
         'orden_sel': orden,
         'per_page': int(per_page),
-        # Pasamos las fechas para mantenerlas en los inputs
         'inicio_sel': f_inicio,
         'fin_sel': f_fin,
     }
@@ -412,7 +412,6 @@ def importar_excel(request):
             creados = 0
             
             try:
-                # 1. Leer Excel (Fila 6 como encabezado)
                 try:
                     df = pd.read_excel(archivo, sheet_name='REGISTRO EGRESOS', header=5)
                 except:
@@ -426,14 +425,13 @@ def importar_excel(request):
 
                 with transaction.atomic():
                     for index, row in df.iterrows():
-                        # Validar Fecha y Monto
                         fecha = row.get('Fecha')
                         if pd.isnull(fecha): continue
                         
                         monto = row.get('Monto Transferencia', 0)
                         if pd.isnull(monto) or monto == 0: continue
 
-                        # 1. Empresa (Si no existe, la crea)
+                        # 1. Empresa
                         nombre_empresa = str(row.get('Empresa', '')).strip()
                         empresa_obj = None
                         if nombre_empresa and nombre_empresa.lower() != 'nan':
@@ -442,7 +440,7 @@ def importar_excel(request):
                                 defaults={'nombre': nombre_empresa}
                             )
 
-                        # 2. Centro de Costo (Si no existe, lo crea)
+                        # 2. Centro de Costo
                         nombre_centro = str(row.get('Centro de Costo', '')).strip()
                         centro_obj = None
                         if nombre_centro and nombre_centro.lower() != 'nan':
@@ -451,7 +449,7 @@ def importar_excel(request):
                                 defaults={'nombre': nombre_centro}
                             )
 
-                        # 3. Clasificación (Si no existe, la crea)
+                        # 3. Clasificación
                         nombre_clasif = str(row.get('Clasificación', '')).strip()
                         clasif_obj = None
                         if nombre_clasif and nombre_clasif.lower() != 'nan':
@@ -460,7 +458,6 @@ def importar_excel(request):
                                 defaults={'nombre': nombre_clasif}
                             )
 
-                        # Datos de Texto
                         desc_movimiento = str(row.get('Descripcion de Movimiento', 'Sin descripción')).strip()
                         if desc_movimiento.lower() == 'nan': desc_movimiento = 'Sin descripción'
 
@@ -473,7 +470,6 @@ def importar_excel(request):
 
                         tipo_doc = str(row.get('Tipo', 'GASTO')).strip()
                         
-                        # Guardar
                         Ingreso.objects.create(
                             fecha=fecha,
                             monto_transferencia=monto,
@@ -527,8 +523,8 @@ def descargar_plantilla(request):
 # =========================================================
 # 4. MÓDULO CAJA CHICA
 # =========================================================
-# --- BUSCA ESTA PARTE EN core/views.py ---
 @login_required
+@user_passes_test(es_finanzas)
 def lista_caja_chica(request):
     gastos = CajaChica.objects.all().order_by('-fecha')
 
@@ -540,14 +536,9 @@ def lista_caja_chica(request):
     labels = []
     data = []
     
-    # --- Y REEMPLAZA ESTE BLOQUE FOR ---
     for registro in resumen_meses:
         if registro['mes']:
-            # 1. Formatear Mes (Si sale en inglés, no importa por ahora)
             labels.append(registro['mes'].strftime('%Y-%m')) 
-            
-            # 2. LA CORRECCIÓN CLAVE: Convertir Decimal a int
-            # Si no hacemos esto, JavaScript recibe "Decimal('5000')" y falla.
             monto_entero = int(registro['total']) 
             data.append(monto_entero)
 
@@ -557,7 +548,7 @@ def lista_caja_chica(request):
         'data_grafico': data,
     }
     return render(request, 'core/caja_chica_lista.html', context)
-    
+
 @login_required
 def caja_chica_crear(request):
     if request.method == 'POST':
@@ -620,6 +611,7 @@ def exportar_caja_chica_pdf(request):
 # 5. MÓDULO RRHH (Trabajadores y Finiquitos)
 # =========================================================
 @login_required
+@user_passes_test(es_rrhh)
 def dashboard_rrhh(request):
     filtro_empresa = request.GET.get('empresa', '')
     workers_queryset = Trabajador.objects.all()
@@ -756,7 +748,7 @@ def importar_rrhh(request):
                                 previo['monto_finiquito'] = monto
                             if not previo['fecha_finiquito'] and fecha_fin:
                                 previo['fecha_finiquito'] = fecha_fin
-                            continue
+                        continue
                     
                     trabajadores_batch[rut] = {
                         'nombre': nombre,
@@ -838,9 +830,9 @@ def editar_trabajador(request, id):
 
 # =========================================================
 # 6. MÓDULO LOGÍSTICA / INVENTARIO
-# ========================================================
-# 
+# =========================================================
 @login_required
+@user_passes_test(es_bodega)
 def inventario_dashboard(request):
     # 1. Base Query (Traemos lotes con sus productos)
     lotes = Lote.objects.select_related('producto').all().order_by('fecha_vencimiento')
@@ -873,14 +865,13 @@ def inventario_dashboard(request):
         lotes = lotes.filter(fecha_vencimiento__gt=hoy + datetime.timedelta(days=30))
 
     # 3. Datos para el Gráfico (Stock por Categoría)
-    # Agrupamos por categoría del producto y sumamos la cantidad
     datos_grafico = lotes.values('producto__categoria').annotate(total_stock=Sum('cantidad')).order_by('-total_stock')
     
     labels_grafico = [d['producto__categoria'] for d in datos_grafico]
     data_grafico = [d['total_stock'] for d in datos_grafico]
 
     # 4. Paginación
-    paginator = Paginator(lotes, 20) # 20 items por página
+    paginator = Paginator(lotes, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
@@ -896,8 +887,7 @@ def inventario_dashboard(request):
             'grafico_data': data_grafico
         })
 
-    # 6. Respuesta Normal (HTML completo)
-    # Obtenemos categorías únicas para el filtro dropdown
+    # 6. Respuesta Normal
     categorias = Producto.objects.values_list('categoria', flat=True).distinct()
 
     context = {
@@ -905,7 +895,6 @@ def inventario_dashboard(request):
         'categorias': categorias,
         'labels_grafico': labels_grafico,
         'data_grafico': data_grafico,
-        # Mantener filtros en el HTML
         'cat_sel': categoria,
         'estado_sel': estado,
     }
@@ -913,7 +902,6 @@ def inventario_dashboard(request):
 
 @login_required
 def ingresar_lote(request):
-    """Formulario para ingresar stock nuevo"""
     if request.method == 'POST':
         form = LoteForm(request.POST)
         if form.is_valid():
@@ -975,13 +963,9 @@ class CustomLoginView(LoginView):
             self.request.session.set_expiry(0)
         return super().form_valid(form)
 
-# core/views.py (Al final del archivo)
-
 class AdminLoginView(CustomLoginView):
     """Login para administradores (Oscuro)"""
     template_name = 'core/login_admin.html'
-    
-    # AGREGA ESTA LÍNEA PARA ROMPER EL BUCLE:
     redirect_authenticated_user = False
 
 
@@ -1000,16 +984,16 @@ def api_predecir_categoria(request):
     return JsonResponse({'categoria': sugerencia if sugerencia else None})
 
 @login_required
+@user_passes_test(es_bodega)
 def salida_stock(request):
-    """Descuenta stock usando lógica FIFO (Lo primero que vence es lo primero que sale)"""
+    """Descuenta stock usando lógica FIFO"""
     if request.method == 'POST':
         form = SalidaStockForm(request.POST)
         if form.is_valid():
             producto = form.cleaned_data['producto']
             cantidad_solicitada = form.cleaned_data['cantidad']
-            precio_total = form.cleaned_data['precio_total'] # Nuevo dato
+            precio_total = form.cleaned_data['precio_total']
 
-            # 1. Verificar Stock
             stock_actual = producto.lote_set.aggregate(total=Sum('cantidad'))['total'] or 0
             
             if cantidad_solicitada > stock_actual:
@@ -1017,7 +1001,7 @@ def salida_stock(request):
             else:
                 try:
                     with transaction.atomic():
-                        # A. Lógica FIFO (Descontar Stock)
+                        # A. Lógica FIFO
                         lotes = Lote.objects.filter(producto=producto).order_by('fecha_vencimiento')
                         pendiente = cantidad_solicitada
                         
@@ -1032,10 +1016,10 @@ def salida_stock(request):
                                 lote.save()
                                 pendiente = 0
 
-                        # B. Lógica FINANCIERA (Crear el Ingreso)
+                        # B. Lógica FINANCIERA
                         Ingreso.objects.create(
                             fecha=datetime.date.today(),
-                            tipo_documento='VENTA', # O boleta/factura
+                            tipo_documento='VENTA', 
                             monto_transferencia=precio_total,
                             descripcion_movimiento=f"Venta de {cantidad_solicitada} x {producto.nombre}",
                             detalle="Generado automáticamente desde Inventario",
@@ -1056,21 +1040,18 @@ def salida_stock(request):
 
 @login_required
 def enviar_alerta_vencimientos(request):
-    """Revisa lotes por vencer y envía un correo al usuario actual."""
+    """Revisa lotes por vencer y envía un correo"""
     hoy = datetime.date.today()
     fecha_limite = hoy + datetime.timedelta(days=30) 
 
-    # Buscamos lo crítico
     lotes_vencidos = Lote.objects.filter(fecha_vencimiento__lt=hoy)
     lotes_por_vencer = Lote.objects.filter(fecha_vencimiento__range=[hoy, fecha_limite])
 
-    # Si no hay nada urgente, no molestamos
     if not lotes_vencidos.exists() and not lotes_por_vencer.exists():
         messages.info(request, 'No hay productos en riesgo para reportar.')
         return redirect('inventario_dashboard')
 
     try:
-        # Preparamos el mensaje (Asunto y Cuerpo)
         asunto = f"⚠️ ALERTA DE STOCK - {hoy.strftime('%d/%m/%Y')}"
         
         mensaje_html = render_to_string('core/emails/alerta_stock.html', {
@@ -1079,10 +1060,9 @@ def enviar_alerta_vencimientos(request):
             'usuario': request.user
         })
 
-        # Enviamos el correo al usuario que está conectado
         send_mail(
             subject=asunto,
-            message="", # Mensaje plano vacío porque usamos HTML
+            message="",
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[request.user.email], 
             html_message=mensaje_html,
@@ -1097,23 +1077,18 @@ def enviar_alerta_vencimientos(request):
 
     return redirect('inventario_dashboard')
 
-
 @login_required
 def centro_datos(request):
-    """Vista principal del panel de exportación"""
     return render(request, 'core/exportar_datos.html')
 
 @login_required
 def exportar_finanzas_csv(request):
-    """Genera un CSV con todos los gastos e ingresos listo para Power BI"""
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="dataset_finanzas.csv"'
 
     writer = csv.writer(response)
-    # Encabezados limpios
     writer.writerow(['ID', 'Fecha', 'Año', 'Mes', 'Tipo', 'Empresa', 'Centro Costo', 'Clasificacion', 'Descripcion', 'Detalle', 'Monto'])
 
-    # Consultamos optimizando las relaciones (select_related) para que sea rápido
     movimientos = Ingreso.objects.select_related('empresa', 'centro_costo', 'clasificacion').all().order_by('-fecha')
 
     for mov in movimientos:
@@ -1126,7 +1101,7 @@ def exportar_finanzas_csv(request):
             mov.empresa.nombre if mov.empresa else 'Sin Asignar',
             mov.centro_costo.nombre if mov.centro_costo else 'General',
             mov.clasificacion.nombre if mov.clasificacion else 'Sin Clasificar',
-            mov.descripcion_movimiento, # Nombre real en tu BD
+            mov.descripcion_movimiento,
             mov.detalle,
             mov.monto_transferencia
         ])
@@ -1135,7 +1110,6 @@ def exportar_finanzas_csv(request):
 
 @login_required
 def exportar_inventario_csv(request):
-    """Genera un CSV con el estado actual del stock (Lotes)"""
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="dataset_stock_actual.csv"'
 
@@ -1146,7 +1120,6 @@ def exportar_inventario_csv(request):
     hoy = datetime.date.today()
 
     for lote in lotes:
-        # Calculamos estado para análisis
         dias = (lote.fecha_vencimiento - hoy).days
         estado = "VENCIDO" if dias < 0 else "POR VENCER" if dias <= 30 else "OK"
 
@@ -1165,14 +1138,11 @@ def exportar_inventario_csv(request):
 
 @login_required
 def nuevo_ingreso(request):
-    """REGISTRAR NUEVO GASTO / INGRESO"""
     if request.method == 'POST':
         form = IngresoForm(request.POST)
         if form.is_valid():
             form.save()
             messages.success(request, 'Registro guardado correctamente.')
-            # Al guardar, te envía al Dashboard principal. 
-            # Si prefieres ir a la lista, cambia 'dashboard' por 'lista_ingresos'
             return redirect('dashboard')
     else:
         form = IngresoForm()
@@ -1180,46 +1150,38 @@ def nuevo_ingreso(request):
     return render(request, 'core/nuevo_ingreso.html', {'form': form})
 
 def exportar_excel(request):
-    # 1. Crear el libro de Excel y la hoja
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Reporte Financiero"
 
-    # 2. Definir los Encabezados de la tabla
     headers = ['ID', 'Fecha', 'Tipo', 'Categoría', 'Descripción', 'Monto']
     ws.append(headers)
 
-    # 3. Estilizar los Encabezados (Negrita, Fondo Gris, Centrado)
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill(start_color="4F81BD", end_color="4F81BD", fill_type="solid")
     
-    for cell in ws[1]:  # Fila 1
+    for cell in ws[1]:
         cell.font = header_font
         cell.fill = header_fill
         cell.alignment = Alignment(horizontal="center")
 
-    # 4. Obtener los datos de la Base de Datos
-    # (Ajusta 'Movimiento' o 'Gasto' según como se llame tu modelo real)
     from .models import Movimiento 
     movimientos = Movimiento.objects.all().order_by('-fecha')
 
-    # 5. Escribir los datos fila por fila
     for mov in movimientos:
         ws.append([
             mov.id,
-            mov.fecha.strftime('%d/%m/%Y'),  # Formato fecha limpio
-            mov.tipo,      # Ingreso o Gasto
+            mov.fecha.strftime('%d/%m/%Y'),
+            mov.tipo,
             str(mov.categoria),
             mov.descripcion,
             mov.monto
         ])
 
-    # 6. Ajustar ancho de columnas automáticamente (Estético)
     dim_holder = {}
     for col in range(ws.min_column, ws.max_column + 1):
         dim_holder[col] = 0
         
-    # (Este bloque calcula el ancho ideal basado en el contenido)
     for row in ws.iter_rows():
         for cell in row:
             if cell.value:
@@ -1228,7 +1190,6 @@ def exportar_excel(request):
     for col, width in dim_holder.items():
         ws.column_dimensions[openpyxl.utils.get_column_letter(col)].width = width + 2
 
-    # 7. Preparar la respuesta HTTP para descargar
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )

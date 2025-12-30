@@ -1,4 +1,5 @@
 {% load static %}
+{% load auth_extras %}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -146,47 +147,53 @@
                 <span>Dashboard</span>
             </a>
 
-            <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Finanzas</div>
+            {% if request.user|has_group:"Finanzas" %}
+                <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Finanzas</div>
 
-            <a class="nav-link {% if 'centro_datos' in request.resolver_match.url_name %}active{% endif %}" 
-               href="{% url 'centro_datos' %}">
-                <i class="bi bi-graph-up-arrow"></i>
-                <span>Data & Reportes</span>
-            </a>
-            
-            <a class="nav-link {% if 'finanzas' in request.resolver_match.url_name %}active{% endif %}" 
-               href="{% url 'finanzas_dashboard' %}">
-                <i class="bi bi-pie-chart-fill"></i>
-                <span>Panel Financiero</span>
-            </a>
+                <a class="nav-link {% if 'centro_datos' in request.resolver_match.url_name %}active{% endif %}" 
+                href="{% url 'centro_datos' %}">
+                    <i class="bi bi-graph-up-arrow"></i>
+                    <span>Data & Reportes</span>
+                </a>
+                
+                <a class="nav-link {% if 'finanzas' in request.resolver_match.url_name %}active{% endif %}" 
+                href="{% url 'finanzas_dashboard' %}">
+                    <i class="bi bi-pie-chart-fill"></i>
+                    <span>Panel Financiero</span>
+                </a>
 
-            <a class="nav-link {% if 'ingreso' in request.resolver_match.url_name %}active{% endif %}" 
-               href="{% url 'lista_ingresos' %}">
-                <i class="bi bi-cash-stack"></i>
-                <span>Egresos / Gastos</span>
-            </a>
+                <a class="nav-link {% if 'ingreso' in request.resolver_match.url_name %}active{% endif %}" 
+                href="{% url 'lista_ingresos' %}">
+                    <i class="bi bi-cash-stack"></i>
+                    <span>Egresos / Gastos</span>
+                </a>
 
-            <a class="nav-link {% if 'caja_chica' in request.resolver_match.url_name %}active{% endif %}" 
-               href="{% url 'lista_caja_chica' %}">
-                <i class="bi bi-wallet2"></i>
-                <span>Caja Chica</span>
-            </a>
+                <a class="nav-link {% if 'caja_chica' in request.resolver_match.url_name %}active{% endif %}" 
+                href="{% url 'lista_caja_chica' %}">
+                    <i class="bi bi-wallet2"></i>
+                    <span>Caja Chica</span>
+                </a>
+            {% endif %}
 
-            <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Personal</div>
+            {% if request.user|has_group:"RRHH" %}
+                <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Personal</div>
 
-            <a class="nav-link {% if 'rrhh' in request.resolver_match.url_name %}active{% endif %}" 
-               href="{% url 'dashboard_rrhh' %}">
-                <i class="bi bi-people-fill"></i>
-                <span>Recursos Humanos</span>
-            </a>
+                <a class="nav-link {% if 'rrhh' in request.resolver_match.url_name %}active{% endif %}" 
+                href="{% url 'dashboard_rrhh' %}">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Recursos Humanos</span>
+                </a>
+            {% endif %}
 
-            <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Logística</div>
+            {% if request.user|has_group:"Bodega" %}
+                <div class="text-uppercase small fw-bold text-white-50 px-3 mt-3 mb-1">Logística</div>
 
-            <a class="nav-link {% if 'inventario' in request.resolver_match.url_name %}active{% endif %}" 
-               href="{% url 'inventario_dashboard' %}">
-                <i class="bi bi-box-seam-fill"></i>
-                <span>Control de Stock</span>
-            </a>
+                <a class="nav-link {% if 'inventario' in request.resolver_match.url_name %}active{% endif %}" 
+                href="{% url 'inventario_dashboard' %}">
+                    <i class="bi bi-box-seam-fill"></i>
+                    <span>Control de Stock</span>
+                </a>
+            {% endif %}
         </div>
     </nav>
 
