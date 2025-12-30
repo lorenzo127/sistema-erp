@@ -527,6 +527,7 @@ def descargar_plantilla(request):
 # =========================================================
 # 4. MÓDULO CAJA CHICA
 # =========================================================
+# --- BUSCA ESTA PARTE EN core/views.py ---
 @login_required
 def lista_caja_chica(request):
     gastos = CajaChica.objects.all().order_by('-fecha')
@@ -538,10 +539,17 @@ def lista_caja_chica(request):
 
     labels = []
     data = []
+    
+    # --- Y REEMPLAZA ESTE BLOQUE FOR ---
     for registro in resumen_meses:
         if registro['mes']:
-            labels.append(registro['mes'].strftime('%B %Y')) 
-            data.append(registro['total'])
+            # 1. Formatear Mes (Si sale en inglés, no importa por ahora)
+            labels.append(registro['mes'].strftime('%Y-%m')) 
+            
+            # 2. LA CORRECCIÓN CLAVE: Convertir Decimal a int
+            # Si no hacemos esto, JavaScript recibe "Decimal('5000')" y falla.
+            monto_entero = int(registro['total']) 
+            data.append(monto_entero)
 
     context = {
         'gastos': gastos,
@@ -549,7 +557,7 @@ def lista_caja_chica(request):
         'data_grafico': data,
     }
     return render(request, 'core/caja_chica_lista.html', context)
-
+    
 @login_required
 def caja_chica_crear(request):
     if request.method == 'POST':
