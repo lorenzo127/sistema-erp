@@ -279,8 +279,8 @@ def importar_finanzas(request):
 @user_passes_test(es_finanzas)
 def lista_ingresos(request):
     # 1. Base Query
-    movimientos = Ingreso.objects.all()
-
+    movimientos = Ingreso.objects.select_related('empresa', 'centro_costo', 'clasificacion').all()
+    
     # 2. Filtros
     # Búsqueda texto
     q = request.GET.get('q')

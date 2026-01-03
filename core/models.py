@@ -35,7 +35,7 @@ class Cargo(models.Model):
 # --- TABLAS PRINCIPALES ---
 
 class Ingreso(models.Model):
-    fecha = models.DateField()
+    fecha = models.DateField(db_index=True)
     n_documento = models.CharField(max_length=50, blank=True, null=True)
     
     # Montos
